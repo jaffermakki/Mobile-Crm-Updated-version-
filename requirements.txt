@@ -1,0 +1,23 @@
+# Pinned to the versions the v45 test-suite (300 tests) passed on, on both SQLite and PostgreSQL 16.
+# Unpinned requirements broke rebuilds before: SQLAlchemy 2.1 switched the default postgres driver to
+# psycopg v3 (app/database.py now forces psycopg2 explicitly). Upgrade deliberately, run the tests, then bump.
+fastapi==0.165.0
+starlette==1.7.0
+uvicorn[standard]==0.54.0
+jinja2==3.1.6
+sqlalchemy==2.1.9
+bcrypt==5.0.0
+httpx==0.28.1
+python-multipart==0.0.32
+itsdangerous==2.2.0
+apscheduler==3.11.3
+psycopg2-binary==2.9.13
+cryptography==50.0.1
+sentry-sdk[fastapi]==2.75.0
+openpyxl==3.1.5
+python-barcode==0.16.1
+# Time-zone database. BC (tzdata 2026.2) and Alberta (2026.3) stopped changing clocks on Nov 1 2026.
+# An older copy would put winter evening sales on the wrong day in the reports.
+tzdata>=2026.3
+# v48: draws the QR code on the 2-step set-up page. Optional - without it the page still shows the key to type in.
+segno==1.6.6
