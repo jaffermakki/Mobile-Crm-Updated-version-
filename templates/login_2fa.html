@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block bare_content %}
+<div class="login-wrap">
+  <div class="login-box" style="width:320px">
+    <div class="login-brand">
+      <img src="/static/logo-light.png" class="brand-logo logo-on-dark" alt="tech-pro+">
+      <img src="/static/logo-dark.png" class="brand-logo logo-on-light" alt="tech-pro+">
+    </div>
+    <div class="login-hint">{{ icon('lock', size=12) }} Hi {{ name }} — one more step</div>
+    <p class="text-muted" style="font-size:12px;margin:8px 0 12px;line-height:1.5">
+      Open your authenticator app and type the 6-digit code for this shop.
+      Lost your phone? Use one of your recovery codes instead.
+    </p>
+    <form method="post" action="/login/2fa" autocomplete="off"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <input name="code" id="code" inputmode="text" autocomplete="one-time-code" autocapitalize="off" spellcheck="false"
+               placeholder="123 456" maxlength="20" required autofocus
+               style="font-size:22px;text-align:center;letter-spacing:3px" {% if locked %}disabled{% endif %}>
+      </div>
+      <button class="btn-primary" style="width:100%" {% if locked %}disabled{% endif %}>Sign in</button>
+    </form>
+    <div class="error-text" id="error-text" style="margin-top:10px">
+      {% if locked %}Too many wrong tries from this device. Try again in <span id="lock-secs">{{ lock_seconds }}</span>s.{% elif error %}{{ error }}{% endif %}
+    </div>
+    <div style="text-align:center;margin-top:12px">
+      <a href="/login" style="font-size:12px;color:var(--text-3)">← Start again with your PIN</a>
+    </div>
+  </div>
+</div>
+{% if locked %}
+<script>
+(function(){var left={{ lock_seconds }};setInterval(function(){left--;var e=document.getElementById('lock-secs');if(e)e.textContent=Math.max(0,left);if(left<=0)location.reload();},1000);})();
+</script>
+{% endif %}
+{% endblock %}

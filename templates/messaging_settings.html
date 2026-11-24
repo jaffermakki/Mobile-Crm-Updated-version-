@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+{% macro check(name, label, hint='') %}
+<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:13px;cursor:pointer">
+  <input type="checkbox" name="{{ name }}" {{ 'checked' if v[name]=='true' }} style="width:auto;margin-top:3px">
+  <span><strong>{{ label }}</strong>{% if hint %}<br><span class="text-muted" style="font-size:12px">{{ hint }}</span>{% endif %}</span>
+</label>
+{% endmacro %}
+{% macro tpl(kind, title, note) %}
+<div class="form-group" style="margin-top:10px">
+  <label style="font-weight:700">{{ title }}</label>
+  <textarea name="msg_tpl_{{ kind }}" rows="3" style="width:100%">{{ v['msg_tpl_' ~ kind] }}</textarea>
+  <div class="hint" style="text-align:left">{{ note }}</div>
+  {% set pv = previews[kind] %}
+  <div style="margin-top:6px;padding:8px 10px;border:1px dashed var(--border);border-radius:8px;background:var(--bg2,transparent);font-size:12.5px;white-space:pre-wrap">{{ pv.body }}</div>
+  <div class="text-muted" style="font-size:11.5px;margin-top:3px">
+    Preview with sample data · {{ pv.units }} characters · {{ pv.segments }} text part{{ '' if pv.segments==1 else 's' }} ({{ pv.encoding }})
+    {% if pv.segments > 1 %}— each part is billed separately{% endif %}
+    {% if pv.encoding=='Unicode' %}— an emoji or curly quote switches the whole text to Unicode (70 characters per part){% endif %}
+  </div>
+  {% for p in pv.problems %}<div class="text-red" style="font-size:12px">This message {{ p }}.</div>{% endfor %}
+  <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+    <input form="test-{{ kind }}" name="to_phone" placeholder="Send a test to this phone" style="width:210px" required>
+    <button form="test-{{ kind }}" class="btn-secondary btn-sm">Send test (saved wording)</button>
+  </div>
+</div>
+{% endmacro %}
+
+<div class="page-head">
+  <div>
+    <div class="eyebrow"><a href="/messaging">Automatic texts</a></div>
+    <h1>Messaging settings</h1>
+  </div>
+</div>
+
+{% if flash %}<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--red)' }}">{{ flash[1] }}</div>{% endif %}
+{% if errors %}
+<div class="card" style="border-color:var(--red)"><strong>Nothing was saved. Please fix:</strong>
+  <ul style="margin:6px 0 0 18px">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if not s.configured %}
+<div class="card" style="border-color:var(--red)">{{ icon('triangle-alert') }} Twilio is not set up yet. Add the Account SID, Auth Token and sending number in <a href="/settings">Settings → Notifications</a> first.</div>
+{% endif %}
+
+<form method="post" action="/messaging/settings">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<div class="card">
+  <h2>Master switch</h2>
+  {{ check('msg_enabled', 'Send automatic texts to customers', 'Off by default. While off, nothing is queued and nothing is sent. Turning it on only affects repairs that become Ready from now on; phones already waiting are offered a one-time reminder on the Automatic texts page.') }}
+  <div class="hint" style="text-align:left;margin-top:6px">Customers who reply STOP, or who are marked "do not text" on their page, never receive any automatic text. For STOP replies to be recorded, the Two-Way SMS Webhook URL in <a href="/settings">Settings → Notifications</a> must be pasted into Twilio.</div>
+</div>
+
+<div class="card">
+  <h2>Repair updates <span class="badge badge-gray">service messages</span></h2>
+  {{ check('msg_ready_enabled', 'Text when a repair becomes Ready for Pickup') }}
+  <div class="form-group" style="max-width:260px"><label>Wait this many minutes first</label><input type="number" name="msg_ready_delay_min" min="0" max="120" value="{{ v.msg_ready_delay_min }}">
+    <div class="hint" style="text-align:left">A short delay lets you undo a mis-click before the customer is texted.</div></div>
+  {{ tpl('ready', 'Ready-for-pickup text', 'Placeholders: ' ~ placeholders|join(', ')) }}
+  {{ check('msg_remind_enabled', 'Remind customers who have not collected', 'Stops by itself the moment the phone is collected.') }}
+  <div class="form-group" style="max-width:260px"><label>Remind after (days since Ready)</label><input name="msg_remind_days" value="{{ v.msg_remind_days }}">
+    <div class="hint" style="text-align:left">Up to 5 numbers, like 3, 7, 14.</div></div>
+  {{ tpl('reminder', 'Pickup reminder text', '"Reply STOP to opt out." is added automatically.') }}
+</div>
+
+<div class="card">
+  <h2>Reviews <span class="badge badge-amber">promotional — needs consent</span></h2>
+  {{ check('msg_review_enabled', 'Ask for a Google review after pickup', 'Only customers who ticked "Consents to marketing emails/SMS" are asked (Canada\'s anti-spam law).') }}
+  <div class="form-group"><label>Your Google review link</label><input name="msg_review_link" value="{{ v.msg_review_link }}" placeholder="https://g.page/r/…/review"></div>
+  <div class="form-group" style="max-width:260px"><label>Ask this many days after pickup</label><input type="number" name="msg_review_delay_days" min="0" max="30" value="{{ v.msg_review_delay_days }}"></div>
+  {{ tpl('review', 'Review request text', '"Reply STOP to opt out." is added automatically.') }}
+</div>
+
+<div class="card">
+  <h2>Win-back <span class="badge badge-amber">promotional — needs consent</span></h2>
+  {{ check('msg_winback_enabled', 'Text good customers who have not been in for a while', 'Best spenders first, a few a day, never the same person twice within the cooldown. Only customers with marketing consent.') }}
+  <div class="form-row" style="flex-wrap:wrap">
+    <div class="form-group"><label>Not seen for (days)</label><input type="number" name="msg_winback_after_days" min="30" max="730" value="{{ v.msg_winback_after_days }}"></div>
+    <div class="form-group"><label>Wait between texts to one person (days)</label><input type="number" name="msg_winback_cooldown_days" min="30" max="730" value="{{ v.msg_winback_cooldown_days }}"></div>
+    <div class="form-group"><label>At most per day</label><input type="number" name="msg_winback_per_day" min="1" max="100" value="{{ v.msg_winback_per_day }}"></div>
+  </div>
+  {{ tpl('winback', 'Win-back text', 'Do not promise discounts here unless you honour them. "Reply STOP to opt out." is added automatically.') }}
+</div>
+
+<div class="card">
+  <h2>Limits &amp; safety</h2>
+  <div class="form-row" style="flex-wrap:wrap">
+    <div class="form-group"><label>Earliest hour to send (0–23)</label><input type="number" name="msg_quiet_start" min="0" max="23" value="{{ v.msg_quiet_start }}"></div>
+    <div class="form-group"><label>Latest hour to send (1–24)</label><input type="number" name="msg_quiet_end" min="1" max="24" value="{{ v.msg_quiet_end }}"></div>
+    <div class="form-group"><label>Daily text limit</label><input type="number" name="msg_daily_cap" min="1" max="2000" value="{{ v.msg_daily_cap }}"></div>
+  </div>
+  <div class="hint" style="text-align:left">Hours are shop time. Texts due outside the window wait for it to open. The daily limit stops a mistake from running up your Twilio bill.</div>
+  <div class="form-row" style="flex-wrap:wrap;margin-top:8px">
+    <div class="form-group"><label>Country code for numbers typed without one</label><input name="msg_country_code" value="{{ v.msg_country_code }}" style="width:80px"><div class="hint" style="text-align:left">1 for Canada and the US.</div></div>
+    <div class="form-group"><label>Shop phone (for the {shop_phone} placeholder)</label><input name="msg_shop_phone" value="{{ v.msg_shop_phone }}"></div>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;margin:12px 0 28px"><button class="btn-primary">Save messaging settings</button><a href="/messaging" class="btn-secondary">Back</a></div>
+</form>
+{# The test-send forms live OUTSIDE the settings form (HTML does not allow nested forms); their inputs sit inside it via the form="" attribute. #}
+{% for k in ['ready','reminder','review','winback'] %}
+<form id="test-{{ k }}" method="post" action="/messaging/settings/test"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="kind" value="{{ k }}"></form>
+{% endfor %}
+{% endblock %}

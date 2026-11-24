@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+  <h1 style="margin:0">Moneris Check</h1>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <a href="/reconcile?date={{ prev_d }}" class="btn-secondary btn-sm">&larr; Previous day</a>
+    <form method="get" action="/reconcile" style="display:flex;gap:6px;align-items:center;margin:0">
+      <input type="date" name="date" value="{{ d_iso }}" max="{{ today_iso }}" onchange="this.form.submit()" style="width:auto">
+    </form>
+    {% if next_d %}<a href="/reconcile?date={{ next_d }}" class="btn-secondary btn-sm">Next day &rarr;</a>{% endif %}
+    {% if can_edit %}<a href="/card-fees" class="btn-secondary btn-sm">{{ icon('circle-dollar-sign') }} Card fees &amp; statements</a>{% endif %}
+  </div>
+</div>
+<p class="text-muted" style="margin:6px 0 14px;font-size:13px">
+  Every sale is rung up on the Moneris terminal and in the CRM. This page lines the two up for <b>{{ d.strftime('%A, %B %d, %Y') }}</b> so a missed or mistyped sale shows up the same day.
+</p>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else ('var(--warn)' if flash[0]=='amber' else 'var(--red)') }}">{{ flash[1] }}</div>
+{% endif %}
+
+<style>
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media (max-width:560px){ .hide-sm{display:none} .ref-cell{display:inline-block;max-width:104px;white-space:normal;word-break:break-all;font-size:11.5px;line-height:1.25} .tbl-scroll th,.tbl-scroll td{padding-left:6px;padding-right:6px} .tbl-scroll th{white-space:normal} }
+</style>
+{% if checks %}
+<div class="card" style="border-color:var(--warn)">
+  <h2 style="margin-top:0">{{ icon('triangle-alert') }} Needs a look <span class="text-muted" style="font-weight:400;font-size:12px">— since this check was switched on</span></h2>
+  <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">
+    {% for c in checks %}
+    <li><a href="{{ c.href }}" {% if c.severity=='bad' %}style="color:var(--red)"{% endif %}>{{ c.message }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="grid grid-3">
+  <div class="card">
+    <div class="stat-label">CRM card total (sales − refunds)</div>
+    <div class="stat-value">${{ "%.2f"|format(crm_net) }}</div>
+    <div class="text-muted" style="font-size:12px">The same figure Cash Up compares against the batch</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Moneris batch total</div>
+    {% if batch %}
+    <div class="stat-value">${{ "%.2f"|format(batch.amount) }}</div>
+    <div class="text-muted" style="font-size:12px">Entered {{ L(batch.entered_at).strftime('%b %d, %H:%M') }}</div>
+    {% else %}
+    <div class="stat-value text-muted">Not entered</div>
+    <div class="text-muted" style="font-size:12px">From the terminal's end-of-day batch report</div>
+    {% endif %}
+  </div>
+  <div class="card" style="{% if diff is not none and diff|abs >= 0.01 and not (batch and batch.resolved) %}border-color:var(--red){% elif diff is not none and diff|abs < 0.01 %}border-color:var(--green){% endif %}">
+    <div class="stat-label">Difference (Moneris − CRM)</div>
+    {% if diff is none %}
+    <div class="stat-value text-muted">—</div>
+    {% elif diff|abs < 0.01 %}
+    <div class="stat-value text-green">$0.00</div><div style="font-size:12px" class="text-green">✓ They agree</div>
+    {% else %}
+    <div class="stat-value {{ 'text-muted' if batch.resolved else 'text-red' }}">{{ '%+.2f'|format(diff) }}</div>
+    <div class="text-muted" style="font-size:12px">
+      {% if batch.resolved %}Marked explained{% elif diff > 0 %}Moneris has MORE — a sale rung on the terminal but not in the CRM?{% else %}Moneris has LESS — a CRM card sale that was voided, declined or never charged?{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if can_edit %}
+<div class="card">
+  <h2 style="margin-top:0">Enter the terminal's batch total</h2>
+  <form method="post" action="/reconcile/batch" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="date" value="{{ d_iso }}">
+    <div class="form-group" style="margin:0"><label>Net batch total ($)</label>
+      <input name="amount" type="number" step="0.01" required value="{{ '%.2f'|format(batch.amount) if batch else '' }}" placeholder="sales minus refunds" style="width:170px"></div>
+    <div class="form-group" style="margin:0;flex:1;min-width:200px"><label>Note (optional)</label>
+      <input name="note" maxlength="300" value="{{ batch.note if batch and batch.note else '' }}" placeholder="e.g. includes a $20 refund"></div>
+    <button class="btn-primary">Save</button>
+  </form>
+  {% if batch and diff is not none and diff|abs >= 0.01 %}
+  <form method="post" action="/reconcile/resolve" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="date" value="{{ d_iso }}">
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" name="resolved" {% if batch.resolved %}checked{% endif %}> I found the reason for this difference — stop flagging it</label>
+    <button class="btn-secondary btn-sm">Update</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0">Card transactions in the CRM <span class="text-muted" style="font-weight:400;font-size:12px">— tick each one off against the terminal's list</span></h2>
+  {% if rows %}
+  <div class="tbl-scroll"><table>
+    <thead><tr><th style="width:34px"></th><th>Time</th><th>Sale</th><th class="hide-sm">Customer</th><th>Reference</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr {% if r.optional %}style="opacity:.55"{% endif %}>
+        <td><input type="checkbox" class="tick" data-amt="{{ r.signed }}" {% if r.optional %}disabled title="Refunded the same day — may not show on the terminal"{% endif %} onchange="sumTicks()"></td>
+        <td class="text-muted">{{ r.when.strftime('%H:%M') }}</td>
+        <td><a href="{{ r.href }}">{{ r.label }}</a>{% if r.note %} <span class="badge badge-gray">{{ r.note }}</span>{% endif %}</td>
+        <td class="text-muted hide-sm">{{ r.who }}</td>
+        <td>{% if r.ref %}<span class="mono ref-cell">{{ r.ref }}</span>{% elif r.kind == 'sale' and r.label.startswith('INV') %}<span class="badge badge-amber">missing</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td style="text-align:right" class="{{ 'text-red' if r.kind=='refund' }}">{{ '−' if r.kind=='refund' }}${{ "%.2f"|format(r.amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4" style="text-align:right;font-weight:700">Ticked so far</td><td class="hide-sm"></td><td style="text-align:right;font-weight:700" id="tick-total">$0.00</td></tr>
+      <tr><td colspan="4" style="text-align:right" class="text-muted">CRM total</td><td class="hide-sm"></td><td style="text-align:right" class="text-muted">${{ "%.2f"|format(crm_net) }}</td></tr>
+    </tfoot>
+  </table></div>
+  {% else %}
+  <p class="text-muted" style="margin:0">No card transactions recorded in the CRM for this day.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Compare with the Moneris transaction list</h2>
+  <p class="text-muted" style="font-size:13px;margin:0 0 10px">
+    Download or copy the day's transactions from your Moneris portal (any CSV/spreadsheet layout works — the amount, type and date columns are found automatically), then paste or upload them here.
+    Nothing is saved; this just shows what doesn't line up.
+  </p>
+  <form method="post" action="/reconcile/match" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="date" value="{{ d_iso }}">
+    <div class="form-group"><label>Paste the transactions</label>
+      <textarea name="csv_text" rows="5" placeholder="Date, Type, Reference, Amount&#10;2026-11-20 10:15, Purchase, 660123…, $45.20">{{ csv_text }}</textarea></div>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div class="form-group" style="margin:0"><label>…or upload a CSV</label><input type="file" name="file" accept=".csv,.txt,.tsv,text/csv,text/plain"></div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" name="all_dates" {% if all_dates %}checked{% endif %}> Include rows from other dates</label>
+      <button class="btn-primary">{{ icon('refresh-cw') }} Compare</button>
+    </div>
+  </form>
+</div>
+
+{% if bank %}
+<div class="card" id="match-results">
+  <h2 style="margin-top:0">Result</h2>
+  {% if bank.error %}
+  <div style="padding:8px 10px;border-radius:8px;background:var(--red-soft);color:var(--red);font-size:13px">{{ bank.error }}</div>
+  {% endif %}
+
+  {% if bank.headers %}
+  <details {% if bank.error %}open{% endif %} style="margin:10px 0">
+    <summary style="cursor:pointer;font-size:13px" class="text-muted">
+      Columns used — amount: <b>{{ bank.headers[bank.cols.amount] if bank.cols.amount is not none and bank.cols.amount < bank.headers|length else 'not found' }}</b>,
+      type: <b>{{ bank.headers[bank.cols.type] if bank.cols.type is not none and bank.cols.type < bank.headers|length else '—' }}</b>,
+      date: <b>{{ bank.headers[bank.cols.date] if bank.cols.date is not none and bank.cols.date < bank.headers|length else '—' }}</b>
+      · wrong? change them
+    </summary>
+    <form method="post" action="/reconcile/match" enctype="multipart/form-data" style="margin-top:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="date" value="{{ d_iso }}">
+      <input type="hidden" name="csv_text" value="{{ csv_text }}">
+      {% if all_dates %}<input type="hidden" name="all_dates" value="on">{% endif %}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        {% for fld, label in (('col_amount','Amount column'),('col_type','Type column (sale / refund / void)'),('col_date','Date column')) %}
+        <div class="form-group" style="margin:0"><label>{{ label }}</label>
+          <select name="{{ fld }}" style="width:auto">
+            <option value="">{{ 'auto' if fld != 'col_amount' else 'choose…' }}</option>
+            {% for h in bank.headers %}<option value="{{ loop.index0 }}" {% if bank.cols[fld[4:]] == loop.index0 %}selected{% endif %}>{{ h or ('Column ' ~ loop.index) }}</option>{% endfor %}
+          </select></div>
+        {% endfor %}
+        <button class="btn-secondary btn-sm">Re-run</button>
+      </div>
+    </form>
+  </details>
+  {% endif %}
+
+  {% if res %}
+  <div class="grid grid-3" style="margin-bottom:12px">
+    <div class="card" style="margin:0"><div class="stat-label">Moneris list (net)</div><div class="stat-value">${{ "%.2f"|format(res.bank_net) }}</div>
+      <div class="text-muted" style="font-size:12px">{{ bank.rows|length }} transaction{{ 's' if bank.rows|length != 1 }}{% if bank.other_dates %} · {{ bank.other_dates }} from other dates skipped{% endif %}{% if bank.voids %} · {{ bank.voids|length }} void{{ 's' if bank.voids|length != 1 }} ignored{% endif %}</div></div>
+    <div class="card" style="margin:0"><div class="stat-label">CRM (net)</div><div class="stat-value">${{ "%.2f"|format(res.crm_net) }}</div></div>
+    <div class="card" style="margin:0;border-color:{{ 'var(--green)' if res.clean else 'var(--warn)' }}">
+      <div class="stat-label">Verdict</div>
+      <div class="stat-value {{ 'text-green' if res.clean else '' }}" style="font-size:20px">{% if res.clean %}✓ Everything lines up{% else %}Needs a look{% endif %}</div>
+      <div class="text-muted" style="font-size:12px">{{ res.pairs|length }} matched</div></div>
+  </div>
+
+  {% if res.bank_only %}
+  <h3 style="color:var(--red);margin:14px 0 6px">Charged on the terminal but NOT in the CRM <span class="badge badge-red">{{ res.bank_only|length }}</span></h3>
+  <p class="text-muted" style="font-size:12px;margin:0 0 6px">Money was taken but no sale was rung up — add it (or find out what it was).</p>
+  <div class="tbl-scroll"><table><thead><tr><th>Terminal row</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+    {% for b in res.bank_only %}<tr><td class="text-muted" style="font-size:12px">{{ b.label }}</td><td style="text-align:right" class="{{ 'text-red' if b.kind=='refund' }}">{{ '−' if b.kind=='refund' }}${{ "%.2f"|format(b.amount) }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% endif %}
+
+  {% if res.crm_only %}
+  <h3 style="color:var(--warn);margin:14px 0 6px">In the CRM but NOT on the terminal list <span class="badge badge-amber">{{ res.crm_only|length }}</span></h3>
+  <p class="text-muted" style="font-size:12px;margin:0 0 6px">Recorded as paid by card, but the terminal has no matching charge — a voided/declined card, a wrong amount, or the wrong payment method in the CRM.</p>
+  <div class="tbl-scroll"><table><thead><tr><th>Sale</th><th>Customer</th><th>Reference</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+    {% for c in res.crm_only %}<tr><td><a href="{{ c.href }}">{{ c.label }}</a></td><td class="text-muted">{{ c.who }}</td><td class="mono">{{ c.ref or '—' }}</td><td style="text-align:right">{{ '−' if c.kind=='refund' }}${{ "%.2f"|format(c.amount) }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% endif %}
+
+  {% set odd = res.pairs|selectattr('status','in',['amount','refcheck','noref'])|list %}
+  {% if odd %}
+  <h3 style="margin:14px 0 6px">Matched, but worth a glance <span class="badge badge-gray">{{ odd|length }}</span></h3>
+  <div class="tbl-scroll"><table><thead><tr><th>Sale</th><th>CRM ref</th><th>Terminal row</th><th style="text-align:right">CRM</th><th style="text-align:right">Terminal</th><th></th></tr></thead><tbody>
+    {% for p in odd %}<tr>
+      <td><a href="{{ p.crm.href }}">{{ p.crm.label }}</a></td><td class="mono">{{ p.crm.ref or '—' }}</td>
+      <td class="text-muted" style="font-size:12px">{{ p.bank.label }}</td>
+      <td style="text-align:right">${{ "%.2f"|format(p.crm.amount) }}</td><td style="text-align:right">${{ "%.2f"|format(p.bank.amount) }}</td>
+      <td>{% if p.status=='amount' %}<span class="badge badge-red">amount differs</span>{% elif p.status=='refcheck' %}<span class="badge badge-amber">matched on amount — reference not found</span>{% else %}<span class="badge badge-gray">matched on amount — no reference</span>{% endif %}</td>
+    </tr>{% endfor %}
+  </tbody></table></div>
+  {% endif %}
+
+  {% set good = res.pairs|selectattr('status','equalto','ok')|list %}
+  {% if good %}
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px" class="text-muted">{{ good|length }} matched cleanly (reference and amount agree)</summary>
+    <div class="tbl-scroll"><table style="margin-top:6px"><tbody>
+      {% for p in good %}<tr><td><a href="{{ p.crm.href }}">{{ p.crm.label }}</a></td><td class="mono">{{ p.crm.ref }}</td><td style="text-align:right">${{ "%.2f"|format(p.crm.amount) }}</td></tr>{% endfor %}
+    </tbody></table></div></details>
+  {% endif %}
+  {% if bank.voids %}
+  <details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px" class="text-muted">{{ bank.voids|length }} voided / declined row{{ 's' if bank.voids|length != 1 }} on the terminal list (ignored)</summary>
+    <div class="tbl-scroll"><table style="margin-top:6px"><tbody>
+      {% for v in bank.voids %}<tr><td class="text-muted" style="font-size:12px">{{ v.label }}</td><td style="text-align:right">${{ "%.2f"|format(v.amount_c/100) }}</td></tr>{% endfor %}
+    </tbody></table></div></details>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+function sumTicks(){
+  let t = 0;
+  document.querySelectorAll('.tick:checked').forEach(c => { t += parseFloat(c.dataset.amt || 0); });
+  document.getElementById('tick-total').textContent = (t < 0 ? '−$' : '$') + Math.abs(t).toFixed(2);
+}
+</script>
+{% endblock %}

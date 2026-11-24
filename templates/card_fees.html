@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+  <h1 style="margin:0">Card Fees &amp; Payment Settings</h1>
+  <a href="/reconcile" class="btn-secondary btn-sm">{{ icon('credit-card') }} Moneris Check</a>
+</div>
+<p class="text-muted" style="margin:6px 0 14px;font-size:13px">
+  Enter each month's fees from your Moneris statement and the profit reports subtract them, so "profit" is what you actually keep after card costs.
+  The statement's card volume (optional) is checked against what the CRM recorded.
+</p>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2 style="margin-top:0">Add or update a statement</h2>
+    <form method="post" action="/card-fees/save">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-row">
+        <div class="form-group"><label>Month</label><input type="month" name="month" value="{{ this_month }}" max="{{ this_month }}" required></div>
+        <div class="form-group"><label>Total fees charged ($)</label><input name="fees" type="number" step="0.01" min="0" required placeholder="e.g. 87.42"></div>
+      </div>
+      <div class="form-group"><label>Net card volume on the statement ($) <span class="text-muted" style="font-weight:400">— optional; sales minus refunds</span></label>
+        <input name="volume" type="number" step="0.01" placeholder="lets the CRM check its card total for the month"></div>
+      <div class="form-group"><label>Note (optional)</label><input name="note" maxlength="300"></div>
+      <button class="btn-primary">Save statement</button>
+    </form>
+    <p class="text-muted" style="font-size:12px;margin:10px 0 0">Saving a month that already has an entry replaces it.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Payment settings</h2>
+    <form method="post" action="/card-fees/settings">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;font-size:13px">
+        <input type="checkbox" name="cash_rounding" {% if cash_rounding %}checked{% endif %} style="margin-top:3px">
+        <span><b>Round cash to the nearest 5¢</b><br><span class="text-muted">Canada has no penny. Only the cash part of a sale is rounded; card payments stay exact, and tax and sales figures stay on the true total.</span></span>
+      </label>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;font-size:13px">
+        <input type="checkbox" name="require_card_ref" {% if require_ref %}checked{% endif %} style="margin-top:3px">
+        <span><b>Require the Moneris reference on card sales</b><br><span class="text-muted">The code on the terminal receipt. It's what lets the Moneris Check match a CRM sale to a terminal transaction.</span></span>
+      </label>
+      <div class="form-group"><label>Estimated card fee rate (%) <span class="text-muted" style="font-weight:400">— only used for months without a statement</span></label>
+        <input name="fee_rate_pct" type="number" step="0.01" min="0" max="19.99" value="{{ fee_rate if fee_rate else '' }}" placeholder="blank = don't estimate" style="width:200px"></div>
+      <button class="btn-primary">Save settings</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Last 12 months</h2>
+  <div style="overflow-x:auto"><table>
+    <thead><tr><th>Month</th><th style="text-align:right">CRM card sales (net)</th><th style="text-align:right">Statement volume</th><th style="text-align:right">Difference</th><th style="text-align:right">Fees</th><th style="text-align:right">Fee rate</th><th></th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td style="text-align:right" title="taken ${{ '%.2f'|format(r.crm.taken) }} − refunds ${{ '%.2f'|format(r.crm.refunds) }}">${{ "%.2f"|format(r.crm.net) }}</td>
+        <td style="text-align:right">{% if r.st and r.st.volume is not none %}${{ "%.2f"|format(r.st.volume) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td style="text-align:right" class="{{ 'text-green' if r.diff is not none and r.diff|abs < 0.01 else ('text-red' if r.diff is not none else '') }}">{% if r.diff is not none %}{{ '%+.2f'|format(r.diff) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td style="text-align:right">{% if r.st %}${{ "%.2f"|format(r.st.fees) }}{% else %}<span class="text-muted">not entered</span>{% endif %}</td>
+        <td style="text-align:right">{% if r.rate is not none %}{{ '%.2f'|format(r.rate) }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td style="text-align:right">{% if r.st %}
+          <form method="post" action="/card-fees/delete" style="display:inline" onsubmit="return confirm('Remove this statement entry?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ r.key }}">
+            <button class="btn-secondary btn-sm">Remove</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="text-muted" style="font-size:12px;margin:8px 0 0">
+    A difference between the statement and the CRM means the two disagree about the month's card sales — use <a href="/reconcile">Moneris Check</a> on the days involved.
+    Fee rate = fees ÷ statement volume (or the CRM's card total when no volume was entered).
+  </p>
+</div>
+{% endblock %}

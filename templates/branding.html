@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Shop Configuration</div><h1>Customer pages</h1></div>
+  <a href="/settings" class="btn-secondary btn-sm">{{ icon('settings') }} Settings</a>
+</div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--warn)' if flash[0]=='amber' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+
+<div class="card">
+  <p style="margin:0">{{ icon('image') }} This is how your shop looks on the pages customers open from your texts: the <strong>repair status</strong> page and the <strong>quote</strong> page. Set it once here. The shop name, phone and address come from <a href="/settings">Settings</a>.</p>
+</div>
+
+<div class="br-grid">
+  <div>
+    <div class="card" id="logo-card">
+      <h2>Logo</h2>
+      {% if brand.has_logo %}
+      <div class="br-logo">
+        <span class="cp-logo"><img src="{{ brand.logo_url }}" alt="Your current logo"></span>
+        <span class="text-muted" style="font-size:12px">{{ logo.width }}×{{ logo.height }} · {{ (logo.size / 1024)|round|int }} KB</span>
+      </div>
+      {% else %}
+      <p class="text-muted" style="font-size:12.5px;margin-top:0">No logo yet, so customers see your shop name. A square or wide picture with a clear background works best.</p>
+      {% endif %}
+      <form method="post" action="/branding/logo" enctype="multipart/form-data" class="rp-import"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required aria-label="Logo picture">
+        <button class="btn-secondary">{{ icon('upload') }} {{ 'Replace logo' if brand.has_logo else 'Upload logo' }}</button>
+      </form>
+      <p class="hint" style="text-align:left;margin:8px 0 0">PNG, JPEG or WebP, up to {{ max_logo_kb }} KB and {{ max_side }} pixels on the longest side. SVG is not accepted. The logo sits on a white tile so it shows on dark and light phones.</p>
+      {% if brand.has_logo %}
+      <form method="post" action="/branding/logo/remove" style="margin-top:10px" data-confirm="Remove the logo? Customers will see your shop name instead."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn-secondary btn-sm">Remove logo</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/branding/save" class="card"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h2>Colour, hours and photos</h2>
+      <div class="form-group"><label for="br-color-hex">Shop colour</label>
+        <div class="br-color">
+          <input type="color" id="br-color-pick" value="{{ brand.color }}" aria-label="Pick the colour">
+          <input type="text" id="br-color-hex" name="color" value="{{ brand.color if brand.custom_color else '' }}" placeholder="{{ default_color }}" maxlength="7" autocomplete="off" aria-label="Colour as #RRGGBB">
+          <span class="text-muted" style="font-size:12px">Leave empty for the standard yellow. Used for the progress dots and the top bar.</span>
+        </div>
+      </div>
+      <div class="form-group"><label for="br-hours">Opening hours <span class="text-muted" style="font-weight:400">(up to {{ max_hour_lines }} short lines)</span></label>
+        <textarea id="br-hours" name="hours" rows="4" maxlength="{{ max_hours + 40 }}" placeholder="Mon to Fri 10:00 to 18:00&#10;Sat 10:00 to 16:00&#10;Closed Sunday">{{ brand.hours }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="br-check"><input type="checkbox" name="show_photos" value="1" {% if brand.show_photos %}checked{% endif %}> Show the drop-off photos on the customer's private status link</label>
+        <div class="br-warn">Off by default. When on, the customer sees the front, back, damage and after-repair photos you took, only on their own private link (never on the ticket-number lookup). A photo can show a lock screen or messages, so only turn this on if you check photos before saving them.</div>
+      </div>
+      <button class="btn-primary">{{ icon('save') }} Save</button>
+    </form>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Preview</h2>
+      <p class="text-muted" style="font-size:12.5px;margin-top:0">Opens in a new tab with made-up sample details, so nothing real is shown. Save first to see your changes.</p>
+      <div class="br-views">
+        <a href="/branding/preview?view=received" target="_blank" rel="noopener">Status: received</a>
+        <a href="/branding/preview?view=progress" target="_blank" rel="noopener">Status: in progress</a>
+        <a href="/branding/preview?view=waiting" target="_blank" rel="noopener">Status: waiting for a part</a>
+        <a href="/branding/preview?view=ready" target="_blank" rel="noopener">Status: ready</a>
+        <a href="/branding/preview?view=lookup" target="_blank" rel="noopener">Ticket lookup</a>
+        <a href="/branding/preview?view=quote" target="_blank" rel="noopener">Quote</a>
+        <a href="/branding/preview?view=quote-approved" target="_blank" rel="noopener">Quote: approved</a>
+      </div>
+      <div class="cp-box" style="max-width:none;pointer-events:none;--brand:{{ brand.color }};--on-brand:{{ brand.on_color }}" aria-hidden="true">
+        {% set cp_title = 'Check Repair Status' %}{% set shop_name = brand.shop_name %}{% include "partials/cp_head.html" %}
+        <ol class="cp-steps">
+          <li class="cp-step cp-done"><span class="cp-dot">{{ icon('check') }}</span><span class="cp-step-name">Received</span></li>
+          <li class="cp-step cp-done"><span class="cp-dot">{{ icon('check') }}</span><span class="cp-step-name">Checked</span></li>
+          <li class="cp-step cp-current"><span class="cp-dot">3</span><span class="cp-step-name">Repairing</span></li>
+          <li class="cp-step"><span class="cp-dot">4</span><span class="cp-step-name">Ready</span></li>
+          <li class="cp-step"><span class="cp-dot">5</span><span class="cp-step-name">Picked up</span></li>
+        </ol>
+        {% set cp_ticket = '' %}{% include "partials/cp_foot.html" %}
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/branding.js?v=54" defer></script>
+{% endblock %}

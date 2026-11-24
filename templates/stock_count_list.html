@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Inventory</div><h1>Stock Count</h1></div>
+  <div class="quick-actions">
+    <a href="/products" class="btn-secondary" style="padding:9px 16px;border-radius:8px;font-weight:700">{{ icon('package') }} Products</a>
+  </div>
+</div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--warn)' if flash[0]=='amber' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+
+<div class="card">
+  <h2>Start a count</h2>
+  <p class="text-muted" style="font-size:13px;margin-top:0">
+    Walk a shelf with your phone, scan each item once per unit, and the count builds itself.
+    Nothing in your stock changes until the owner or a manager reviews the count and approves it.
+    The screen hides what the system expects, so the count is honest.
+  </p>
+  <form method="post" action="/stock-count/start" class="sc-start"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Name <span class="text-muted" style="font-weight:400">(optional)</span></label>
+      <input name="name" maxlength="80" placeholder="e.g. Case wall, front window" autocomplete="off"></div>
+    <div class="form-group"><label>Only this category <span class="text-muted" style="font-weight:400">(optional)</span></label>
+      <select name="scope">
+        <option value="">Whole shop</option>
+        {% for c in categories %}<option value="{{ c }}">{{ category_labels.get(c, c) }}</option>{% endfor %}
+      </select></div>
+    <button class="btn-primary" style="min-height:44px">Start counting</button>
+  </form>
+</div>
+
+{% set open_counts = counts|selectattr('status', 'equalto', 'open')|list %}
+{% if open_counts %}
+<div class="card" style="border-color:var(--accent)">
+  <h2>In progress</h2>
+  {% for c in open_counts %}
+  <div class="total-row">
+    <span><a href="/stock-count/{{ c.id }}"><b>{{ c.name }}</b></a>
+      <span class="text-muted" style="font-size:12px"> · {{ line_totals.get(c.id, 0) }} product{{ '' if line_totals.get(c.id, 0) == 1 else 's' }} · started {{ L(c.created_at).strftime('%b %d, %H:%M') }} by {{ c.created_by }}{% if c.scope_category %} · {{ category_labels.get(c.scope_category, c.scope_category) }}{% endif %}</span></span>
+    <a href="/stock-count/{{ c.id }}" class="btn-primary btn-sm">Continue</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% set past = counts|rejectattr('status', 'equalto', 'open')|list %}
+<div class="card">
+  <h2>Past counts</h2>
+  {% if past %}
+  <div class="sc-scroll"><table>
+    <thead><tr><th>Count</th><th>Result</th><th class="hide-sm">Products</th><th>Net units</th><th class="hide-sm">When</th></tr></thead>
+    <tbody>
+    {% for c in past %}
+      <tr>
+        <td><a href="/stock-count/{{ c.id }}">{{ c.name }}</a>{% if c.scope_category %}<br><small class="text-muted">{{ category_labels.get(c.scope_category, c.scope_category) }}</small>{% endif %}</td>
+        <td>{% if c.status == 'applied' %}<span class="badge badge-green">Applied</span>{% else %}<span class="badge badge-gray">Cancelled</span>{% endif %}</td>
+        <td class="hide-sm">{{ line_totals.get(c.id, 0) }}</td>
+        <td>{% if c.status == 'applied' %}<span class="{{ 'sc-var-up' if c.units_net > 0 else 'sc-var-down' if c.units_net < 0 else '' }}">{{ '%+d'|format(c.units_net) }}</span>{% else %}—{% endif %}</td>
+        <td class="hide-sm text-muted">{{ L(c.closed_at or c.created_at).strftime('%b %d, %Y') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="text-muted" style="font-size:13px;margin:0">No finished counts yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

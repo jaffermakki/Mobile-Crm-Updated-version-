@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Security</div><h1>{{ 'Your new recovery codes' if not first_time else '2-step sign-in is on — save your recovery codes' }}</h1></div></div>
+<div class="card" style="max-width:520px;border-color:var(--warn)">
+  <p style="margin:0 0 10px"><strong>Save these now — they are shown only once.</strong> Each code works one time if you lose your phone. Print them or write them down and keep them somewhere safe, away from the phone.</p>
+  <div id="codes" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;margin:12px 0">
+    {% for c in codes %}
+    <div>{{ c }}</div>
+    {% endfor %}
+  </div>
+  <button type="button" class="btn-secondary btn-sm" onclick="window.print()">Print</button>
+  <a href="/security" class="btn-primary btn-sm">I've saved them</a>
+</div>
+{% endblock %}

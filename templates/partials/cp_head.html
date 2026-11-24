@@ -1,0 +1,7 @@
+{# v54: the shop's header on customer pages. Needs: brand, shop_name, cp_title. #}
+{% if preview %}<div class="cp-preview" role="note">Preview: this is how customers see the page. The details are made up and the buttons do nothing.</div>{% endif %}
+<header class="cp-head">
+  {% if brand.has_logo %}<span class="cp-logo"><img src="{{ brand.logo_url }}" alt="{{ shop_name }}"></span>
+  {% else %}<span class="cp-mark" aria-hidden="true">{{ icon('wrench') }}</span><span class="cp-name">{{ shop_name }}</span>{% endif %}
+  <h1 class="cp-title">{{ cp_title }}</h1>
+</header>

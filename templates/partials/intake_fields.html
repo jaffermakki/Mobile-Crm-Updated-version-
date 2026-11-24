@@ -1,0 +1,47 @@
+{# v49: the drop-off condition checklist. Used in the New Ticket form and in the ticket's "Check-in" card.
+   Needs: intake, intake_rows, intake_accessories, intake_passcode_states, intake_find_my_states #}
+<div class="checkin">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+    <div class="chk-sub" style="margin:0">Condition when it came in</div>
+    <button type="button" class="btn-secondary btn-sm" onclick="this.closest('.checkin').querySelectorAll('.seg-ok input').forEach(function(i){i.checked=true})">Mark everything fine</button>
+  </div>
+  {% for r in intake_rows %}
+  <div class="chk-row">
+    <div class="chk-label">{{ r.label }}</div>
+    <div class="seg" role="radiogroup" aria-label="{{ r.label }}">
+      <label class="seg-ok"><input type="radio" name="chk_{{ r.key }}" value="ok" {{ 'checked' if intake.checks.get(r.key) == 'ok' }}><span>{{ r.ok_text }}</span></label>
+      <label class="seg-issue"><input type="radio" name="chk_{{ r.key }}" value="issue" {{ 'checked' if intake.checks.get(r.key) == 'issue' }}><span>{{ r.issue_text }}</span></label>
+      <label class="seg-na"><input type="radio" name="chk_{{ r.key }}" value="na" {{ 'checked' if intake.checks.get(r.key) == 'na' }}><span>Not tested</span></label>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="chk-sub">Left with us</div>
+  <div class="chk-checks">
+    {% for key, label in intake_accessories %}
+    <label><input type="checkbox" name="acc_{{ key }}" value="1" {{ 'checked' if key in intake.left }}> {{ label }}</label>
+    {% endfor %}
+  </div>
+
+  <div class="chk-sub">Passcode</div>
+  <div class="seg" role="radiogroup" aria-label="Passcode">
+    {% for key, label in intake_passcode_states %}
+    <label><input type="radio" name="lock_passcode" value="{{ key }}" {{ 'checked' if intake.passcode == key }}><span>{{ label }}</span></label>
+    {% endfor %}
+  </div>
+  <div class="hint" style="text-align:left;margin:4px 0 0">Don't type the passcode here; write it on the ticket tag if you need it.</div>
+
+  <div class="chk-sub">Find My iPhone / Google lock</div>
+  <div class="seg" role="radiogroup" aria-label="Find My or Google lock">
+    {% for key, label in intake_find_my_states %}
+    <label class="{{ 'seg-issue' if key == 'on' else '' }}"><input type="radio" name="lock_find_my" value="{{ key }}" {{ 'checked' if intake.find_my == key }}><span>{{ label }}</span></label>
+    {% endfor %}
+  </div>
+
+  <div class="chk-checks" style="margin-top:12px">
+    <label style="flex:1 1 100%"><input type="checkbox" name="intake_data_warning" value="1" {{ 'checked' if intake.data_warning }}> Customer was told repairs can erase data, and that backing up is their responsibility</label>
+  </div>
+
+  <div class="form-group" style="margin-top:12px"><label>Anything else worth noting (scratches, marks, what the customer said)</label>
+    <textarea name="intake_notes" rows="2" maxlength="500">{{ intake.notes }}</textarea></div>
+</div>

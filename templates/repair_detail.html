@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--warn)' if flash[0]=='amber' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+{% set cost_now = repair.final_cost if repair.final_cost is not none else repair.estimated_cost %}
+{% set is_late = repair.promised_by and repair.promised_by < today and repair.status not in ['COMPLETED','COLLECTED'] %}
+
+<div class="card t-hero" id="ticket-hero">
+  <div class="t-hero-top">
+    <div style="min-width:0">
+      <span class="t-no">Ticket #{{ repair.ticket_no }}</span>
+      <h1>Ticket #{{ repair.ticket_no }} — {{ repair.device }}</h1>
+      <div class="t-issue">{{ repair.issue }}{% if repair.description %} · <span class="text-muted">{{ repair.description }}</span>{% endif %}</div>
+    </div>
+    <span class="badge badge-lg {{ status_badge[repair.status] }}">{{ status_labels[repair.status] }}</span>
+  </div>
+
+  {% if repair.customer %}
+  <div class="t-person">
+    <span class="t-avatar" aria-hidden="true">{{ repair.customer.name[:1]|upper }}</span>
+    <div class="t-person-main">
+      <a class="t-name" href="/customers/{{ repair.customer.id }}">{{ repair.customer.name }}</a>
+      <span class="t-phone">{{ repair.customer.phone or 'No phone on file' }}</span>
+    </div>
+    {% if repair.customer.phone %}
+    <div class="t-contact">
+      <a href="tel:{{ repair.customer.phone|e }}" aria-label="Call {{ repair.customer.name|e }}">{{ icon('phone') }}</a>
+      {% if not repair.customer.sms_opt_out %}<a href="/customers/{{ repair.customer.id }}#messages" aria-label="Text {{ repair.customer.name|e }}">{{ icon('message-circle') }}</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="t-facts">
+    <div class="t-fact"><span class="k">{{ 'Final' if repair.final_cost is not none else 'Estimate' }}</span><span class="v">{% if cost_now is not none %}${{ "%.2f"|format(cost_now) }}{% else %}—{% endif %}</span></div>
+    <div class="t-fact"><span class="k">Promised</span><span class="v {{ 'late' if is_late }}">{{ repair.promised_by or '—' }}{% if is_late %} · late{% endif %}</span></div>
+    <div class="t-fact"><span class="k">Technician</span><span class="v">{{ repair.technician.name if repair.technician else 'Unassigned' }}</span></div>
+    <div class="t-fact"><span class="k">Warranty</span><span class="v">{{ repair.warranty_days }} days</span></div>
+  </div>
+
+  <div class="stepper" role="list" aria-label="Repair progress">
+    {% for s in status_order %}
+    <div class="st {{ 'done' if loop.index0 < cur_idx else 'active' if loop.index0==cur_idx else '' }}" role="listitem"{% if loop.index0==cur_idx %} aria-current="step"{% endif %}>
+      <span class="dot">{{ '✓' if loop.index0 < cur_idx else loop.index }}</span>
+      <span class="lbl">{{ status_labels[s] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if next_status or repair.status in ['READY', 'COMPLETED'] %}
+<div class="card t-actions t-actions-sticky" id="ticket-actions">
+  <div class="t-actions-row">
+    {% if repair.status in ['READY', 'COMPLETED'] %}
+    <form method="post" action="/repairs/{{ repair.id }}/charge" class="t-wide"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-primary" style="width:100%;background:var(--green);color:#062;font-weight:800">
+        {{ icon('credit-card') }} Charge &amp; Collect — ${{ "%.2f"|format(repair.final_cost if repair.final_cost is not none else (repair.estimated_cost or 0)) }}
+      </button>
+    </form>
+    {% endif %}
+    {% if next_status %}
+    <form method="post" action="/repairs/{{ repair.id }}/advance" class="t-adv{{ ' t-pair' if repair.status=='READY' }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="note" class="t-note" placeholder="Optional note" style="width:100%;margin-bottom:6px">
+      <div class="t-adv-row">
+        <button class="btn-primary t-adv-btn" aria-label="Move to: {{ status_labels[next_status] }}">→ <span class="mv-pre">Move to: </span>{{ status_labels[next_status] }}</button>
+        <button type="button" class="btn-secondary t-note-toggle" aria-label="Add a note to this status change" title="Add a note" onclick="this.closest('.t-actions').classList.toggle('show-note')">{{ icon('file-text') }}<span class="sr-only">Note</span></button>
+      </div>
+    </form>
+    {% endif %}
+    {% if repair.status=='READY' %}
+    <form method="post" action="/repairs/{{ repair.id }}/notify" class="t-notify t-pair"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-secondary" style="width:100%" title="Send the Ready-for-Pickup SMS">{{ icon('smartphone') }} <span class="sms-long">Send Ready-for-Pickup SMS</span><span class="sms-short">Notify</span></button>
+    </form>
+    {% endif %}
+  </div>
+  {% if repair.status in ['READY', 'COMPLETED'] %}<div class="hint" style="text-align:left;margin:6px 0 0">Charge &amp; Collect sends this ticket to the register, then marks it Collected once paid.</div>{% endif %}
+</div>
+{% endif %}
+
+{% if warranty %}
+<div class="card" style="border-color:{{ 'var(--green)' if warranty.active else 'var(--red)' }};display:flex;align-items:center;gap:10px">
+  {% if warranty.active %}
+  <span class="badge badge-green">{{ icon('shield') }} Under Warranty</span>
+  <span>Covered until {{ warranty.expires.strftime('%b %d, %Y') }} ({{ warranty.days_remaining }} day{{ 's' if warranty.days_remaining != 1 }} left) — don't charge for this issue if it's the same repair.</span>
+  {% else %}
+  <span class="badge badge-red">Warranty Expired</span>
+  <span>Expired {{ warranty.expires.strftime('%b %d, %Y') }} ({{ repair.warranty_days }}-day warranty from collection on {{ warranty.collected_date.strftime('%b %d, %Y') }}).</span>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if intake_has and intake.find_my == 'on' %}
+<div class="card" style="border-color:var(--red)"><span class="badge badge-red badge-lg">{{ icon('triangle-alert') }} Find My / Google lock is ON</span>
+  <span style="margin-left:6px">Ask the customer to switch it off, or the device can't be fully tested or restored.</span></div>
+{% endif %}
+
+
+{% include "_quote_card.html" %}
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Details</h2>
+    <div class="total-row"><span>Customer</span><span>{{ repair.customer.name if repair.customer else '—' }} ({{ repair.customer.phone if repair.customer }})</span></div>
+    <div class="total-row"><span>Issue</span><span>{{ repair.issue }}</span></div>
+    <div class="total-row"><span>Description</span><span>{{ repair.description or '—' }}</span></div>
+    <div class="total-row"><span>IMEI / Serial</span><span>{{ repair.imei or '—' }}</span></div>
+    <div class="total-row"><span>Technician</span><span>{{ repair.technician.name if repair.technician else 'Unassigned' }}</span></div>
+    <div class="total-row"><span>Promised By</span><span>{{ repair.promised_by or '—' }}</span></div>
+    <div class="total-row"><span>Warranty</span><span>{{ repair.warranty_days }} days</span></div>
+    <div class="total-row"><span>Status</span><span><span class="badge {{ status_badge[repair.status] }}">{{ status_labels[repair.status] }}</span></span></div>
+    <div class="total-row" style="align-items:center;gap:8px"><span>Customer link</span>
+      <span style="display:flex;gap:6px;align-items:center;min-width:0">
+        <input id="status-link" value="{{ status_link }}" readonly style="min-width:0;width:170px;font-size:12px" onclick="this.select()">
+        <button type="button" class="btn-secondary btn-sm" onclick="(function(b){var i=document.getElementById('status-link');i.select();try{navigator.clipboard.writeText(i.value)}catch(e){document.execCommand('copy')};b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)})(this)">Copy</button>
+      </span>
+    </div>
+    <div class="hint" style="text-align:left;margin:-2px 0 4px">Private link: the customer sees only this ticket's status — no phone digits needed.</div>
+
+    {% if repair.customer and repair.customer.sms_opt_out %}
+    <div class="hint" style="text-align:left;margin-top:8px;color:var(--red)">{{ icon('bell') }} This customer replied STOP / asked not to be texted. No texts will be sent.</div>
+    {% endif %}
+    {% if auto_msgs or msg_on %}
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px">{{ icon('message-circle') }} Automatic texts</div>
+      {% for m in auto_msgs %}
+      <div style="font-size:12px;display:flex;gap:6px;justify-content:space-between;margin:2px 0">
+        <span>{{ KIND_LABEL.get(m.kind, m.kind) }}{% if m.seq %} #{{ m.seq }}{% endif %}{% if m.source=='manual' %} (by hand){% endif %}</span>
+        <span class="text-muted">
+          {% if m.status=='sent' %}sent {{ L(m.sent_at).strftime('%b %d %H:%M') }}
+          {% elif m.status in ('pending','sending') %}queued for {{ L(m.due_at).strftime('%b %d %H:%M') }}
+          {% elif m.status=='failed' %}failed
+          {% else %}{{ m.status }}{% if m.skip_reason %} — {{ m.skip_reason }}{% endif %}{% endif %}
+        </span>
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:12px">None queued for this ticket{% if repair.status in ['RECEIVED','DIAGNOSED','WAITING','IN_PROGRESS'] %} yet — texts are queued when it becomes Ready{% endif %}.</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/repairs/{{ repair.id }}/imei" style="margin-top:12px;display:flex;gap:6px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="imei" id="rd-imei" placeholder="IMEI / serial number" value="{{ repair.imei }}" style="flex:1" maxlength="40" autocomplete="off">
+      <button type="button" class="scan-btn" data-scan-fill="rd-imei" data-scan-prefer="imei" data-scan-submit="1" data-scan-title="Scan the barcode on the phone's box or back" aria-label="Scan the IMEI barcode with the camera">{{ icon('scan-barcode') }}</button>
+      <button class="btn-secondary btn-sm">Save</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Costs</h2>
+    <form method="post" action="/repairs/{{ repair.id }}/cost"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>Estimated Cost</label><input name="estimated_cost" type="number" step="0.01" value="{{ repair.estimated_cost or '' }}"></div>
+      <div class="form-group"><label>Final Cost</label><input name="final_cost" type="number" step="0.01" value="{{ repair.final_cost or '' }}"></div>
+      <button class="btn-secondary">Save Costs</button>
+    </form>
+
+    {% if linked_invoices %}
+    <h2 style="margin-top:16px">Linked Invoices</h2>
+    {% for inv in linked_invoices %}
+    <div class="total-row">
+      <span><a href="/invoices/{{ inv.id }}">{{ inv.number }}</a> <span class="text-muted">{{ L(inv.date).strftime('%b %d, %Y') }}</span></span>
+      <span>${{ "%.2f"|format(inv.total) }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if margin is not none %}
+    <h2 style="margin-top:16px">Margin</h2>
+    <div class="total-row"><span>Parts Cost</span><span>${{ "%.2f"|format(parts_cost) }}</span></div>
+    <div class="total-row" style="font-weight:700"><span>Est. Margin</span><span class="{{ 'text-green' if margin >= 0 else 'text-red' }}">${{ "%.2f"|format(margin) }}</span></div>
+    <div class="hint" style="text-align:left">Charge minus parts cost — doesn't include labor time.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" id="photos" data-repair="{{ repair.id }}" data-csrf="{{ csrf_token() }}" data-count="{{ photos|length }}" data-max="{{ max_photos }}">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+    <h2 style="margin:0">{{ icon('camera') }} Photos <span class="text-muted" style="font-weight:400;font-size:13px">({{ photos|length }} of {{ max_photos }})</span></h2>
+    <a class="btn-secondary btn-sm" href="/repairs/{{ repair.id }}/intake-sheet" target="_blank" rel="noopener">{{ icon('printer') }} Print check-in sheet</a>
+  </div>
+  {% if photos %}
+  <div class="photo-grid">
+    {% for p in photos %}
+    <button type="button" class="photo-tile" data-full="/repairs/{{ repair.id }}/photos/{{ p.id }}" data-id="{{ p.id }}"
+            data-caption="{{ photo_label_names.get(p.label, p.label) }} · {{ L(p.created_at).strftime('%b %d %H:%M') }}{% if p.staff_name %} · {{ p.staff_name }}{% endif %}" aria-label="Open {{ photo_label_names.get(p.label, p.label) }} photo">
+      <img src="/repairs/{{ repair.id }}/photos/{{ p.id }}/thumb" alt="{{ photo_label_names.get(p.label, p.label) }} photo" loading="lazy" width="104" height="104">
+      <span class="photo-tag">{{ photo_label_names.get(p.label, p.label) }}</span>
+    </button>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:14px">No photos yet. Take a few before the repair starts: the front, the back, and any damage.</div>
+  {% endif %}
+  {% if photos|length < max_photos %}
+  <div class="photo-actions">
+    <div class="form-group" style="margin:0;min-width:150px"><label for="photo-label">These photos show</label>
+      <select id="photo-label">{% for k, n in photo_labels %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
+    <label class="btn-primary btn-file">{{ icon('camera') }} Take photo<input type="file" id="photo-cam" accept="image/*" capture="environment"></label>
+    <label class="btn-secondary btn-file">{{ icon('image') }} Choose photos<input type="file" id="photo-pick" accept="image/*" multiple></label>
+  </div>
+  {% endif %}
+  <div class="photo-status" id="photo-status" role="status" aria-live="polite"></div>
+</div>
+
+<div class="card" id="checkin">
+  <h2>{{ icon('clipboard-list') }} Check-in</h2>
+  {% if intake_has %}
+    <div class="hint" style="text-align:left;margin:0 0 8px">Recorded{% if intake.by %} by {{ intake.by }}{% endif %}{% if intake_at %} on {{ L(intake_at).strftime('%b %d, %Y %H:%M') }}{% endif %}.</div>
+    {% if intake_problems %}
+    <div style="margin-bottom:8px">{% for name in intake_problems %}<span class="badge badge-red" style="margin:0 4px 4px 0">{{ name }}</span>{% endfor %}</div>
+    {% else %}
+    <div class="text-muted" style="font-size:13px;margin-bottom:8px">No problems were noted when it came in.</div>
+    {% endif %}
+    <div class="grid grid-2" style="gap:2px 18px">
+      {% for r in intake_rows %}
+      <div class="total-row"><span>{{ r.label }}</span><span class="{{ 'text-red' if r.state == 'issue' else ('text-muted' if r.state == 'na' else 'text-green') }}">{{ r.words }}</span></div>
+      {% endfor %}
+    </div>
+    <div class="total-row"><span>Left with us</span><span>{{ intake_left|join(', ') if intake_left else 'Nothing noted' }}</span></div>
+    <div class="total-row"><span>Passcode</span><span>{{ intake_passcode or '—' }}</span></div>
+    <div class="total-row"><span>Find My / Google lock</span><span class="{{ 'text-red' if intake.find_my == 'on' }}">{{ intake_find_my or '—' }}</span></div>
+    <div class="total-row"><span>Data warning given</span><span>{{ 'Yes' if intake.data_warning else 'Not recorded' }}</span></div>
+    {% if intake.notes %}<div class="total-row"><span>Notes</span><span style="text-align:right">{{ intake.notes }}</span></div>{% endif %}
+  {% else %}
+    <div class="empty-state" style="padding:14px">No check-in was recorded for this ticket.</div>
+  {% endif %}
+  <details style="margin-top:12px" {{ 'open' if not intake_has and request.query_params.get('checkin') }}>
+    <summary class="btn-secondary btn-sm" style="display:inline-flex;cursor:pointer">{{ 'Edit check-in' if intake_has else 'Record check-in' }}</summary>
+    <form method="post" action="/repairs/{{ repair.id }}/intake" style="margin-top:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% include "partials/intake_fields.html" %}
+      <button class="btn-primary" style="margin-top:8px">Save check-in</button>
+      <div class="hint" style="text-align:left;margin-top:6px">Saving with everything left blank clears the check-in.</div>
+    </form>
+  </details>
+</div>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer">
+  <button type="button" class="btn-secondary lb-close" id="lb-close">Close</button>
+  <img id="lb-img" alt="">
+  <div class="lb-bar"><span id="lb-caption"></span>
+    <a id="lb-open" class="btn-secondary btn-sm" href="#" target="_blank" rel="noopener">Open full size</a>
+    {% if can_delete_photos %}
+    <form method="post" id="lb-delete" action="#" onsubmit="return confirm('Delete this photo? This cannot be undone.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-secondary btn-sm">Delete photo</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if all_products %}
+<div class="card" id="parts-used">
+  <h2>Parts Used</h2>
+  {% if parts %}
+  <table class="parts-table">
+    <thead><tr><th>Part</th><th>Qty</th><th>Unit Cost</th><th>Total</th><th></th></tr></thead>
+    <tbody>
+      {% for p in parts %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.qty }}</td>
+        <td>${{ "%.2f"|format(p.unit_cost) }}</td>
+        <td>${{ "%.2f"|format(p.qty * p.unit_cost) }}</td>
+        <td>
+          <form method="post" action="/repairs/{{ repair.id }}/parts/{{ p.id }}/remove" onsubmit="return confirm('Remove this part and restore stock?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn-secondary btn-sm">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:16px"><div class="icon">{{ icon('nut', size=32) }}</div>No parts logged yet.</div>
+  {% endif %}
+  {% if menu_line %}
+  <div class="menu-suggest" id="menu-suggest">
+    <div class="ms-text">
+      <div class="ms-title">{{ icon('tag') }} Price list: {{ menu_line.repair }}{% if menu_line.model %} for {{ menu_line.model }}{% endif %}</div>
+      <div class="ms-sub">${{ '%.2f'|format(menu_line.price) }}{% if menu_line.minutes %} · about {{ menu_line.minutes }} min{% endif %}
+        {% if menu_part %}· usual part: {{ menu_part.sku }} — {{ menu_part.name }} ({{ menu_part.stock }} in stock){% endif %}</div>
+    </div>
+    {% if menu_part and not menu_part_added %}
+    <form method="post" action="/repairs/{{ repair.id }}/parts/add" class="ms-add"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="product_id" value="{{ menu_part.id }}"><input type="hidden" name="qty" value="1">
+      <button class="btn-primary" {% if menu_part.stock <= 0 %}title="None in stock: adding it will be refused until you receive more"{% endif %}>+ Add this part</button>
+    </form>
+    {% elif menu_part and menu_part_added %}
+    <span class="badge badge-green">{{ icon('check') }} Added</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  <form method="post" action="/repairs/{{ repair.id }}/parts/add" class="form-row" style="align-items:flex-end;margin-top:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group" style="flex:2"><label>Product</label>
+      <select name="product_id" required id="part-select">
+        <option value="">— select a part —</option>
+        {% if part_picker.fits %}
+        <optgroup label="Fits this phone — {{ repair.device }}">
+          {% for p in part_picker.fits %}
+          <option value="{{ p.id }}">{{ p.sku }} — {{ p.name }} ({{ p.stock }} in stock)</option>
+          {% endfor %}
+        </optgroup>
+        {% endif %}
+        {% for label, items in part_picker.groups %}
+        <optgroup label="{{ label }}">
+          {% for p in items %}
+          <option value="{{ p.id }}">{{ p.sku }} — {{ p.name }} ({{ p.stock }} in stock)</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Qty</label><input name="qty" type="number" value="1" min="1"></div>
+    <button class="btn-primary">+ Add Part</button>
+  </form>
+  <div class="hint" id="part-scope" style="text-align:left;margin-top:6px">
+    {% if show_all_parts %}
+      Showing every product. <a href="/repairs/{{ repair.id }}#parts-used">Show repair parts only</a>
+    {% elif not part_picker.has_repair_parts %}
+      No repair parts yet: give a product the category <b>Screen</b>, <b>Battery</b> or <b>Part</b> and it appears here.
+      <a href="/repairs/{{ repair.id }}?parts=all#parts-used">Show all products</a>
+    {% elif part_picker.hidden %}
+      Showing screens, batteries and parts only ({{ part_picker.hidden }} other product{{ 's' if part_picker.hidden != 1 }} hidden).
+      <a href="/repairs/{{ repair.id }}?parts=all#parts-used">Show all products</a>
+    {% endif %}
+  </div>
+  <div class="hint" style="text-align:left;margin-top:6px">Adding a part deducts it from stock immediately, same as a POS sale.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Status History</h2>
+  {% for h in history %}
+  <div class="total-row">
+    <span><span class="badge {{ status_badge[h.status] }}">{{ status_labels[h.status] }}</span> {{ h.note }}</span>
+    <span class="text-muted">{{ h.date[:16] }}</span>
+  </div>
+  {% endfor %}
+</div>
+<a href="/repairs">&larr; Back to repairs</a>
+<div class="t-spacer" aria-hidden="true"></div>
+<script src="/static/intake.js?v=49" defer></script>
+<script src="/static/scan.js?v=54" data-csrf="{{ csrf_token() }}" data-can-link="0" defer></script>
+{% endblock %}

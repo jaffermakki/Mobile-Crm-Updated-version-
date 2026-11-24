@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Scanner test — {{ shop_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Check the camera</div><h1>Scanner test</h1></div></div>
+
+<div class="card">
+  <p style="margin:0 0 6px">Open this page <strong>on the phone you will scan with</strong>, using the shop's normal https address. It checks the camera and the scanner, then lets you scan a real barcode. It takes about a minute. Nothing is sent anywhere.</p>
+  <p class="hint" style="text-align:left;margin:0">The camera cannot be tested from a computer or from the shop's server. Only a real phone can show that a barcode is read, which is why this page exists.</p>
+</div>
+
+<div class="card st-result">
+  <h2>{{ icon('shield-check') }} Result</h2>
+  <div id="st-verdict" class="st-verdict st-v-info" role="status" aria-live="polite">Checking this phone…</div>
+</div>
+
+<div class="card">
+  <h2>1. This phone and browser</h2>
+  <ul class="st-list" id="st-checks"></ul>
+</div>
+
+<div class="card">
+  <h2>2. The camera</h2>
+  <p class="hint" style="text-align:left;margin:0 0 8px">Tap the button. If the phone asks to use the camera, tap <strong>Allow</strong>. You should see a live picture.</p>
+  <button type="button" class="btn-primary" id="st-cam">{{ icon('camera') }} Test the camera</button>
+  <button type="button" class="btn-secondary" id="st-cam-stop" hidden>Stop the camera</button>
+  <video id="st-video" class="st-video" playsinline muted autoplay hidden></video>
+  <ul class="st-list" id="st-cam-out"></ul>
+</div>
+
+<div class="card">
+  <h2>3. Scan a barcode</h2>
+  <p class="hint" style="text-align:left;margin:0 0 8px">Tap <strong>Open the scanner</strong> and point it at any barcode: a product box, a phone's box, a packet from the kitchen. Hold it about 15–25 cm away, flat, with no glare. It beeps when it reads one. You can scan several.</p>
+  <button type="button" class="btn-primary" id="st-scan">{{ icon('scan-barcode') }} Open the scanner</button>
+  <ul class="st-list" id="st-reads"></ul>
+  <details style="margin-top:12px">
+    <summary style="cursor:pointer;font-size:13px">No barcode handy? Use this sample</summary>
+    <p class="hint" style="text-align:left;margin:8px 0">Show it on a computer or tablet screen with the brightness up, or print this page, then scan it with the phone. A phone cannot scan its own screen.</p>
+    <div id="st-sample" class="st-sample"></div>
+    <div class="hint" style="text-align:center">Sample number <span id="st-sample-code" style="font-family:var(--mono)"></span></div>
+    <button type="button" class="btn-secondary btn-sm" id="st-print" style="margin-top:8px">Print this page</button>
+  </details>
+</div>
+
+<div class="card">
+  <h2>4. Send me the result</h2>
+  <p class="hint" style="text-align:left;margin:0 0 8px">If something fails, tap <strong>Copy results</strong> and paste it into a message. It says which phone, which browser and which step failed, so the problem can be found.</p>
+  <button type="button" class="btn-secondary" id="st-copy">Copy results</button>
+  <pre id="st-report" class="st-report" aria-label="Test results"></pre>
+</div>
+
+<script src="/static/scan.js?v=54" data-csrf="{{ csrf_token() }}" data-can-link="0" defer></script>
+<script src="/static/scannertest.js?v=54" defer></script>
+{% endblock %}

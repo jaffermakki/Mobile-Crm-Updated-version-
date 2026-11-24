@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Settings → Data</div><h1>Restore from backup</h1></div></div>
+
+<div class="card" style="max-width:640px">
+  <p style="margin:0 0 4px"><strong>{{ filename }}</strong></p>
+  <p class="text-muted" style="font-size:12px;margin:0 0 10px">
+    {% if exported_at %}Made on {{ exported_at[:10] }} at {{ exported_at[11:16] }} (UTC).{% endif %}
+    {% if legacy %}This is an older-format backup: it can add and update products, customers, repairs and Moneris records, but it never deletes anything.
+    {% elif has_secrets %}This backup includes PIN hashes and sign-in secrets, so everyone's PIN will be the one from this backup.
+    {% else %}This backup has no PIN hashes. People who already exist here keep their current PIN; anyone new is added switched off and needs a new PIN from Staff.{% endif %}
+  </p>
+  <p class="text-muted" style="font-size:12px;margin:0 0 6px"><strong>In file</strong> = records in the backup · <strong>Now</strong> = records in the CRM right now{% if not legacy %} · <strong>Deleted</strong> = records that exist now but not in the file, which a restore removes{% endif %}.</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>What</th><th style="text-align:right">In file</th><th style="text-align:right">Now</th>{% if not legacy %}<th style="text-align:right">Deleted</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td style="text-align:right">{{ r.backup }}</td>
+        <td style="text-align:right">{{ r.now }}</td>
+        {% if not legacy %}<td style="text-align:right;{% if r.lost %}color:var(--red);font-weight:700{% endif %}">{{ r.lost or '—' }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if unknown %}<p class="text-muted" style="font-size:12px;margin-top:8px">{{ icon('triangle-alert') }} This file has sections this version doesn't know ({{ unknown|join(', ') }}); they will be skipped.</p>{% endif %}
+
+  {% if not legacy and lost_total %}
+  <div class="card" style="border-color:var(--red);margin-top:12px;padding:10px 14px;font-size:13px">
+    {{ icon('triangle-alert') }} <strong>{{ lost_total }} record{{ '' if lost_total == 1 else 's' }} in the CRM right now are newer than this backup and would be deleted.</strong> If that isn't what you want, cancel and download a fresh backup first.
+  </div>
+  {% endif %}
+
+  {% if photo_effect %}
+  <p class="text-muted" style="font-size:12px;margin-top:10px">{{ icon('image') }} Repair photos are not stored in backup files. {{ photo_effect.kept }} of the {{ photo_effect.total }} photo{{ '' if photo_effect.total == 1 else 's' }} here belong to repairs that are in this file and will stay.{% if photo_effect.removed %} <strong>{{ photo_effect.removed }} belong to repairs that are not in the file and will be deleted</strong> — download the photo .zip from Settings → Data first if you want to keep them.{% endif %}</p>
+  {% endif %}
+
+  <form method="post" action="/import/backup/confirm" style="margin-top:14px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    {% if not legacy %}
+    <div class="form-group"><label>Type <strong>RESTORE</strong> to make the CRM match this file</label><input name="confirm_text" autocomplete="off" autocapitalize="characters" required></div>
+    {% endif %}
+    <button class="btn-primary">{% if legacy %}Merge this backup in{% else %}Restore{% endif %}</button>
+    <a href="/settings#data" class="btn-secondary">Cancel</a>
+  </form>
+  <p class="text-muted" style="font-size:11px;margin-top:10px">Everyone is signed out afterwards. If anything in the file is wrong the restore is cancelled as a whole and nothing changes.</p>
+</div>
+{% endblock %}

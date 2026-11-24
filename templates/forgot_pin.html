@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block bare_content %}
+<div class="login-wrap">
+  <div class="login-box" style="width:320px">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">{{ icon('key') }} Account Recovery</div>
+
+    {% if locked %}
+    <div class="error-text">Too many wrong tries from this device. Try again in <span id="lock-secs">{{ lock_seconds }}</span>s.</div>
+    <script>
+    (function(){var left={{ lock_seconds }};setInterval(function(){left--;var e=document.getElementById('lock-secs');if(e)e.textContent=Math.max(0,left);if(left<=0)location.reload();},1000);})();
+    </script>
+
+    {% elif not security_configured %}
+    <div class="text-muted" style="font-size:13px;line-height:1.6">
+      Self-service recovery isn't set up for this shop — no security question has been configured yet.
+      If you're locked out, you'll need direct database access to reset a PIN, or restore from a backup.
+    </div>
+
+    {% elif not owners %}
+    <div class="text-muted" style="font-size:13px;line-height:1.6">
+      There's no active Owner account to recover. Contact whoever manages this deployment directly.
+    </div>
+
+    {% else %}
+    <p class="text-muted" style="font-size:12px;margin-bottom:10px">
+      This only recovers <strong>Owner</strong> accounts. If you're a Manager, Technician, or Cashier,
+      ask an Owner to reset your PIN from the Staff page instead.
+    </p>
+
+    {% if error %}<div class="error-text" style="margin-bottom:10px">{{ error }}</div>{% endif %}
+
+    <form method="post" action="/forgot-pin"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>Owner Account</label>
+        <select name="staff_id" required>
+          {% for o in owners %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>{{ security_question }}</label>
+        <input name="security_answer" required autofocus>
+      </div>
+      <div class="form-group"><label>New PIN ({{ min_pin }}{% if min_pin < 8 %}–8{% endif %} digits)</label>
+        <input name="new_pin" maxlength="8" pattern="[0-9]{{ '{' }}{{ min_pin }},8{{ '}' }}" inputmode="numeric" autocomplete="off" required>
+      </div>
+      <div class="form-group"><label>Confirm New PIN</label>
+        <input name="confirm_pin" maxlength="8" inputmode="numeric" autocomplete="off" required>
+      </div>
+      <button class="btn-primary" style="width:100%">Reset PIN</button>
+    </form>
+    <p class="text-muted" style="font-size:11px;margin-top:10px">If you use an authenticator app to sign in, you will still need its code afterwards.</p>
+    {% endif %}
+
+    <div style="text-align:center;margin-top:14px">
+      <a href="/login" style="font-size:12px;color:var(--text2)">← Back to login</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

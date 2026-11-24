@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+{% set pin_pattern = '[0-9]{' ~ min_pin ~ ',8}' %}
+<div class="page-head"><div><div class="eyebrow">Team Management</div><h1>Staff</h1></div></div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else ('var(--warn)' if flash[0]=='amber' else 'var(--red)') }}">{{ flash[1] }}</div>
+{% endif %}
+
+{% if not security_configured and staff.role == 'owner' %}
+<div class="card" style="border-color:var(--warn)">
+  {{ icon('triangle-alert') }} No security question is set up yet — anyone with Owner/Manager access can currently change a PIN without extra verification.
+  <a href="/settings#security" class="btn-secondary btn-sm" style="margin-left:6px">Set one up in Settings →</a>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Add Staff Member</h2>
+  <form method="post" action="/staff/add" class="form-row" style="align-items:flex-end"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Name</label><input name="name" required></div>
+    <div class="form-group"><label>PIN ({{ min_pin }}{% if min_pin < 8 %}–8{% endif %} digits)</label><input name="pin" maxlength="8" pattern="{{ pin_pattern }}" inputmode="numeric" autocomplete="off" required></div>
+    <div class="form-group"><label>Role</label>
+      <select name="role">
+        <option value="cashier">Cashier</option>
+        <option value="technician">Technician</option>
+        <option value="manager">Manager</option>
+        {% if staff.role == 'owner' %}<option value="owner">Owner</option>{% endif %}
+      </select>
+    </div>
+    <button class="btn-primary">Add</button>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>2-step</th><th>Change PIN{% if security_configured %} <span class="text-muted" style="font-weight:400">{{ icon('lock') }} requires security answer</span>{% endif %}</th><th></th></tr></thead>
+    <tbody>
+      {% for s in all_staff %}
+      {% set locked = s.role == 'owner' and staff.role != 'owner' %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td><span class="badge badge-gray">{{ s.role }}</span></td>
+        <td>{% if s.active %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-red">Disabled</span>{% endif %}</td>
+        <td>
+          {% if s.totp_enabled %}
+            <span class="badge badge-green">On</span>
+            {% if staff.role == 'owner' and s.id != staff.id %}
+            <form method="post" action="/staff/{{ s.id }}/reset-2fa" style="display:inline" onsubmit="return confirm('Turn off the authenticator step for {{ s.name|e }}? They will sign in with their PIN only until they set it up again.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn-secondary btn-sm">Reset</button>
+            </form>
+            {% endif %}
+          {% else %}<span class="text-muted" style="font-size:12px">off</span>{% endif %}
+        </td>
+        <td>
+          {% if locked %}
+          <span class="text-muted" style="font-size:12px">{{ icon('lock') }} Owner-protected</span>
+          {% else %}
+          <form method="post" action="/staff/{{ s.id }}/edit" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="name" value="{{ s.name }}">
+            <input type="hidden" name="role" value="{{ s.role }}">
+            <input name="new_pin" maxlength="8" pattern="{{ pin_pattern }}" inputmode="numeric" autocomplete="off" placeholder="New PIN" style="width:90px">
+            {% if security_configured %}
+            <input name="security_answer" placeholder="Security answer" style="width:130px" title="{{ security_question }}">
+            {% endif %}
+            <button class="btn-secondary btn-sm">Save</button>
+          </form>
+          {% endif %}
+        </td>
+        <td>
+          {% if not locked %}
+          <form method="post" action="/staff/{{ s.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn-secondary btn-sm">{{ 'Disable' if s.active else 'Enable' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if security_configured %}
+  <div class="hint" style="text-align:left;margin-top:8px">Security question: <em>{{ security_question }}</em></div>
+  {% endif %}
+  <div class="hint" style="text-align:left;margin-top:8px">Give everyone their own PIN — the sign-in uses the first account that matches. Longer is safer: 6 digits is a good choice.</div>
+</div>
+{% endblock %}

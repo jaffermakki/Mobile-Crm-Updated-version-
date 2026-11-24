@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+<div class="eyebrow" style="margin-bottom:8px"><a href="/customers" style="color:var(--text2)">← Customers</a></div>
+
+<div class="card c-hero" id="customer-hero">
+  <div class="c-hero-top">
+    <span class="c-avatar" aria-hidden="true">{{ customer.name[:1]|upper }}</span>
+    <div style="min-width:0;flex:1">
+      <h1>{{ customer.name }}</h1>
+      <div class="c-sub">{{ customer.phone or 'No phone on file' }}{% if customer.email %} · {{ customer.email }}{% endif %}</div>
+      <div class="c-badges">
+        {% if customer.sms_opt_out %}<span class="badge badge-red">Do not text</span>{% endif %}
+        {% if customer.marketing_consent %}<span class="badge badge-green">Marketing OK</span>{% endif %}
+        {% for r in repairs if r.status not in ['COMPLETED','COLLECTED'] %}{% if loop.first %}<span class="badge badge-amber">{{ loop.length }} open repair{{ 's' if loop.length != 1 }}</span>{% endif %}{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="c-quick">
+    {% if customer.phone %}<a href="tel:{{ customer.phone|e }}">{{ icon('phone') }}Call</a>{% else %}<a class="off" aria-disabled="true">{{ icon('phone') }}Call</a>{% endif %}
+    {% if customer.phone and not customer.sms_opt_out %}<a href="#messages" data-tab="messages">{{ icon('message-circle') }}Text</a>{% else %}<a class="off" aria-disabled="true">{{ icon('message-circle') }}Text</a>{% endif %}
+    <a href="/repairs?new=1&amp;phone={{ customer.phone|urlencode }}&amp;name={{ customer.name|urlencode }}">{{ icon('wrench') }}New repair</a>
+    <form method="post" action="/pos/customer" style="display:contents"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="customer_id" value="{{ customer.id }}">
+      <button type="submit">{{ icon('shopping-cart') }}New sale</button>
+    </form>
+  </div>
+
+  <div class="c-stats">
+    <div><span class="k">Spent</span><span class="v text-green">${{ "%.2f"|format(customer.spent) }}</span></div>
+    <div><span class="k">Points</span><span class="v">{{ customer.points }}</span></div>
+    <div><span class="k">Credit</span><span class="v">${{ "%.2f"|format(customer.store_credit) }}</span></div>
+  </div>
+</div>
+
+<div class="c-tabs" id="c-tabs" role="tablist" aria-label="Customer sections">
+  <button type="button" role="tab" data-tab="repairs">Repairs <span class="n">{{ repairs|length }}</span></button>
+  <button type="button" role="tab" data-tab="purchases">Purchases <span class="n">{{ invoices|length }}</span></button>
+  {% if layaways %}<button type="button" role="tab" data-tab="layaways">Layaways <span class="n">{{ layaways|length }}</span></button>{% endif %}
+  {% if trade_ins %}<button type="button" role="tab" data-tab="tradeins">Trade-ins <span class="n">{{ trade_ins|length }}</span></button>{% endif %}
+  {% if customer.phone %}<button type="button" role="tab" data-tab="messages">Messages <span class="n">{{ sms_thread|length }}</span></button>{% endif %}
+  <button type="button" role="tab" data-tab="details">Details</button>
+</div>
+
+<div id="c-panels">
+<div class="card c-panel" data-panel="details" id="details">
+  <h2>Edit Details</h2>
+  <form method="post" action="/customers/{{ customer.id }}/edit" class="form-row" style="align-items:flex-end;flex-wrap:wrap"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Name</label><input name="name" value="{{ customer.name }}" required></div>
+    <div class="form-group"><label>Phone</label><input name="phone" value="{{ customer.phone }}"></div>
+    <div class="form-group"><label>Email</label><input name="email" type="email" value="{{ customer.email }}"></div>
+    <div class="form-group" style="flex-direction:row;align-items:center;gap:8px">
+      <input type="checkbox" name="marketing_consent" id="cd-consent" {{ 'checked' if customer.marketing_consent }} style="width:auto">
+      <label for="cd-consent" style="margin:0">Consents to marketing emails/SMS</label>
+    </div>
+    <button class="btn-primary">Save</button>
+  </form>
+  <div class="hint" style="text-align:left;margin-top:6px">
+    {% if customer.marketing_consent %}
+    <span class="text-green">✓ Consented{% if customer.consent_date %} on {{ customer.consent_date.strftime('%b %d, %Y') }}{% endif %}</span> — OK to send promotional messages (receipts and repair updates don't need this under CASL).
+    {% else %}
+    <span class="text-muted">Not consented — receipts and repair-ready notifications are still fine to send; promotional messages are not.</span>
+    {% endif %}
+  </div>
+  {% if staff.role in ['owner','manager'] %}
+  <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    {% if customer.sms_opt_out %}
+    <span class="badge badge-red">Do not text{% if customer.sms_opt_out_at %} since {{ L(customer.sms_opt_out_at).strftime('%b %d, %Y') }}{% endif %}</span>
+    <span class="text-muted" style="font-size:12px">No automatic or manual texts will be sent. They can restart texts by replying START.</span>
+    <form method="post" action="/customers/{{ customer.id }}/sms-optout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="opt_out" value="0"><button class="btn-secondary btn-sm">Allow texts again</button></form>
+    {% else %}
+    <form method="post" action="/customers/{{ customer.id }}/sms-optout" onsubmit="return confirm('Stop all texts to {{ customer.name|e }}?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="opt_out" value="1"><button class="btn-secondary btn-sm">{{ icon('bell') }} Mark do-not-text</button></form>
+    <span class="text-muted" style="font-size:12px">Use this if the customer tells you at the counter that they don't want texts.</span>
+    {% endif %}
+  </div>
+  {% elif customer.sms_opt_out %}
+  <div style="margin-top:10px"><span class="badge badge-red">Do not text</span></div>
+  {% endif %}
+</div>
+
+<div class="card c-panel" data-panel="repairs" id="repairs">
+  <h2>Repair History</h2>
+  <table class="stack-sm">
+    <thead><tr><th>Ticket</th><th>Device</th><th>Issue</th><th>Status</th><th>Warranty</th></tr></thead>
+    <tbody>
+      {% for r in repairs %}
+      {% set w = repair_warranties.get(r.id) %}
+      <tr>
+        <td class="sc-side"><a href="/repairs/{{ r.id }}">#{{ r.ticket_no }}</a></td>
+        <td class="sc-main">{{ r.device }}</td>
+        <td class="text-muted" data-label="Issue">{{ r.issue }}</td>
+        <td data-label="Status"><span class="badge {{ status_badge.get(r.status,'badge-gray') }}">{{ status_labels.get(r.status, r.status) }}</span></td>
+        <td data-label="Warranty">
+          {% if w and w.active %}<span class="badge badge-green">{{ icon('shield') }} {{ w.days_remaining }}d left</span>
+          {% elif w %}<span class="badge badge-red">Expired</span>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted">No repairs yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card c-panel" data-panel="purchases" id="purchases">
+  <h2>Purchase History</h2>
+  <table class="stack-sm">
+    <thead><tr><th>#</th><th>Total</th><th>Date</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for inv in invoices %}
+      <tr>
+        <td class="sc-main"><a href="/invoices/{{ inv.id }}">{{ inv.number }}</a></td>
+        <td class="sc-side">${{ "%.2f"|format(inv.total) }}</td>
+        <td class="text-muted" data-label="Date">{{ L(inv.date).strftime('%b %d, %Y') }}</td>
+        <td data-label="Status">{% if inv.refunded %}<span class="badge badge-red">Refunded</span>{% else %}<span class="badge badge-green">Paid</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted">No purchases yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card c-panel" data-panel="layaways" id="layaways">
+  <h2>Layaways</h2>
+  <table class="stack-sm">
+    <thead><tr><th>Number</th><th>Total</th><th>Balance</th><th>Due</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for l in layaways %}
+      <tr>
+        <td class="sc-main"><a href="/layaway/{{ l.id }}">{{ l.number }}</a></td>
+        <td class="sc-side">${{ "%.2f"|format(l.total) }}</td>
+        <td data-label="Balance">{% if l.status == 'active' %}${{ "%.2f"|format(l.total - l.paid_total) }}{% else %}$0.00{% endif %}</td>
+        <td class="text-muted" data-label="Due">{{ l.due_date or '—' }}</td>
+        <td data-label="Status">
+          {% if l.status == 'active' %}<span class="badge badge-amber">Active</span>
+          {% elif l.status == 'completed' %}<span class="badge badge-green">Completed</span>
+          {% elif l.status == 'forfeited' %}<span class="badge badge-red">Forfeited</span>
+          {% else %}<span class="badge">Cancelled</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted">No layaways yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card c-panel" data-panel="tradeins" id="tradeins">
+  <h2>Trade-Ins</h2>
+  <table class="stack-sm">
+    <thead><tr><th>Device</th><th>Condition</th><th>Amount</th><th>Payout</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for t in trade_ins %}
+      <tr>
+        <td class="sc-main" style="font-weight:600">{{ t.device }}{% if t.imei %}<div style="font-weight:400;font-size:10px;color:var(--text-3);margin-top:2px">IMEI: {{ t.imei }}</div>{% endif %}</td>
+        <td class="text-muted" data-label="Condition">{{ t.condition or '—' }}</td>
+        <td class="sc-side">${{ "%.2f"|format(t.offered_amount) }}</td>
+        <td class="text-muted" data-label="Payout">{{ t.payout_method.replace('_', ' ')|title }}</td>
+        <td data-label="Status">
+          {% if t.status == 'accepted' %}<span class="badge badge-amber">Accepted</span>
+          {% elif t.status == 'resold' %}<span class="badge badge-green">Resold</span>
+          {% else %}<span class="badge badge-gray">Scrapped</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted">No trade-ins yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if customer.phone %}
+<div class="card c-panel" data-panel="messages" id="messages">
+  <h2>SMS Conversation</h2>
+  <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;margin-bottom:12px;padding:4px">
+    {% for m in sms_thread %}
+    <div style="display:flex;{{ 'justify-content:flex-end' if m.direction=='out' }}">
+      <div style="max-width:75%;padding:8px 12px;border-radius:12px;font-size:13px;
+        {% if m.direction=='out' %}background:var(--accent);color:var(--on-accent);border-bottom-right-radius:3px
+        {% else %}background:var(--surface-3);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:3px{% endif %}">
+        {{ m.body }}
+        <div style="font-size:10px;opacity:.7;margin-top:3px">
+          {% if m.direction=='out' %}{{ m.staff_name }} · {% endif %}{{ L(m.created_at).strftime('%b %d, %H:%M') }}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:16px"><div class="icon">{{ icon('message-circle', size=32) }}</div>No messages yet.</div>
+    {% endfor %}
+  </div>
+  <form method="post" action="/customers/{{ customer.id }}/sms" style="display:flex;gap:8px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="message" placeholder="Type a reply…" required style="flex:1">
+    <button class="btn-primary">Send</button>
+  </form>
+</div>
+{% endif %}
+</div>
+
+<script>
+/* Tabs: with JS off every section simply shows, one after another. */
+(function(){
+  var wrap = document.getElementById('c-panels'), bar = document.getElementById('c-tabs');
+  if(!wrap || !bar) return;
+  var panels = wrap.querySelectorAll('.c-panel'), tabs = bar.querySelectorAll('button[data-tab]');
+  var names = []; panels.forEach(function(p){ names.push(p.getAttribute('data-panel')); });
+  function show(name, push){
+    if(names.indexOf(name) < 0) name = names[0];
+    panels.forEach(function(p){ p.classList.toggle('show', p.getAttribute('data-panel') === name); });
+    tabs.forEach(function(t){ var on = t.getAttribute('data-tab') === name; t.classList.toggle('active', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); if(on){ bar.scrollLeft = Math.max(0, t.offsetLeft - 12); } });
+    if(push){ try{ history.replaceState(null, '', '#' + name); }catch(e){} }
+  }
+  bar.style.display = 'flex';
+  document.getElementById('c-panels').classList.add('tabs-on');
+  tabs.forEach(function(t){ t.addEventListener('click', function(){ show(t.getAttribute('data-tab'), true); }); });
+  document.querySelectorAll('[data-tab]').forEach(function(a){
+    if(a.tagName === 'A') a.addEventListener('click', function(e){ e.preventDefault(); show(a.getAttribute('data-tab'), true); bar.scrollIntoView({block:'start'}); });
+  });
+  var h = (location.hash || '').replace('#', '');
+  var first = {{ ('repairs' if repairs else ('purchases' if invoices else 'details'))|tojson }};
+  show(h && names.indexOf(h) > -1 ? h : first, false);
+})();
+</script>
+{% endblock %}

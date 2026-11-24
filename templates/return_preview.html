@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Confirm the return <span class="text-muted" style="font-size:16px;font-weight:500">· {{ invoice.number }}</span></h1>
+
+<div class="card">
+  <h2>Coming back</h2>
+  {% for item in plan.lines %}
+  <div class="ret-sum-row">
+    <span><b>{{ item.qty }} × {{ item.line.name }}</b>
+      <span class="text-muted" style="font-size:12px"> · ${{ "%.2f"|format(item.line.price) }} each</span>
+      <br><span class="text-muted" style="font-size:12px">{% if item.line.product_id and shelf.get(item.line.id) %}goes back on the shelf{% elif item.line.product_id %}NOT put back on the shelf (damaged / not for resale){% else %}not a stocked item{% endif %}</span>
+    </span>
+    <span>${{ "%.2f"|format(item.gross) }}</span>
+  </div>
+  {% endfor %}
+  <hr style="border:none;border-top:1px solid var(--border);margin:10px 0">
+  <div class="ret-sum-row"><span>Items at list price</span><span>${{ "%.2f"|format(plan.subtotal) }}</span></div>
+  {% if plan.discount > 0 %}<div class="ret-sum-row"><span>Less their share of the discount</span><span>−${{ "%.2f"|format(plan.discount) }}</span></div>{% endif %}
+  {% for t in plan.tax_lines %}<div class="ret-sum-row"><span>{{ t.label }} refunded</span><span>${{ "%.2f"|format(t.amount) }}</span></div>{% endfor %}
+  <div class="ret-sum-row ret-grand"><span>Refund to the customer</span><span>${{ "%.2f"|format(plan.total) }}</span></div>
+</div>
+
+<div class="card">
+  <h2>How it goes back</h2>
+  <p style="margin:0">
+  {% if method == 'Cash' %}<b>Cash:</b> hand back <b>${{ "%.2f"|format(cash_out) }}</b> from the drawer{% if cash_out != plan.total %} (${{ "%.2f"|format(plan.total) }} rounded to the nearest 5¢){% endif %}.
+  {% elif method == 'Card' %}<b>Card:</b> refund <b>${{ "%.2f"|format(plan.total) }}</b> back to the customer's card on the terminal, then confirm here.
+  {% elif method == 'Store Credit' %}<b>Store credit:</b> <b>${{ "%.2f"|format(plan.total) }}</b> is added to {{ customer.name if customer else 'the customer' }}'s balance.
+  {% else %}<b>E-Transfer:</b> send <b>${{ "%.2f"|format(plan.total) }}</b> to the customer by e-transfer, then confirm here.{% endif %}
+  {% if reason %}<br><span class="text-muted">Reason: {{ reason }}</span>{% endif %}
+  </p>
+</div>
+
+<form method="post" action="/invoices/{{ invoice.id }}/return" style="display:flex;gap:8px;flex-wrap:wrap">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="nonce" value="{{ nonce }}">
+  <input type="hidden" name="method" value="{{ method }}">
+  <input type="hidden" name="reason" value="{{ reason }}">
+  {% for lid, qty in picks.items() %}
+  <input type="hidden" name="qty_{{ lid }}" value="{{ qty }}">
+  {% if shelf.get(lid) %}<input type="hidden" name="shelf_{{ lid }}" value="on">{% endif %}
+  {% endfor %}
+  <button class="btn-danger">{{ icon('check') }} Confirm return &amp; refund ${{ "%.2f"|format(plan.total) }}</button>
+  <a class="btn-secondary" href="/invoices/{{ invoice.id }}/return">Go back and change it</a>
+</form>
+{% endblock %}

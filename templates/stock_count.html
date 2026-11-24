@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Stock Count{% if count.scope_category %} · {{ category_labels.get(count.scope_category, count.scope_category) }}{% endif %}</div>
+    <h1>{{ count.name }}</h1>
+  </div>
+  <div class="quick-actions">
+    {% if count.status == 'open' %}<span class="badge badge-amber badge-lg">In progress</span>
+    {% elif count.status == 'applied' %}<span class="badge badge-green badge-lg">Applied</span>
+    {% else %}<span class="badge badge-gray badge-lg">Cancelled</span>{% endif %}
+  </div>
+</div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--warn)' if flash[0]=='amber' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+
+{% if count.status == 'open' %}
+<div id="sc-root" data-count="{{ count.id }}" data-csrf="{{ csrf_token() }}">
+
+  <div class="card">
+    <div class="sc-bar">
+      <button type="button" class="btn-primary" id="sc-camera" style="min-height:46px;flex:1 1 150px;justify-content:center">{{ icon('scan-barcode') }} Scan with camera</button>
+      <form class="sc-code" id="sc-code-form" autocomplete="off">
+        <input id="sc-code" inputmode="text" placeholder="Type or scan a code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Barcode or SKU">
+        <button class="btn-secondary" style="min-height:46px">Add</button>
+      </form>
+    </div>
+    <div class="sc-status" id="sc-status" role="status" aria-live="polite">Scan an item to add 1 to the count. Scan it again for each extra unit.</div>
+
+    <div class="sc-find">
+      <input type="search" id="sc-find" placeholder="No barcode? Find it by name or SKU" autocomplete="off" aria-label="Find a product by name">
+      <div class="sc-found" id="sc-found"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <span>Counted so far</span>
+      <span class="text-muted" style="font-size:13px;font-weight:500"><span id="sc-nprod">{{ line_count }}</span> product<span id="sc-nprod-s">{{ '' if line_count == 1 else 's' }}</span> · <span id="sc-nunits">{{ units }}</span> unit<span id="sc-nunits-s">{{ '' if units == 1 else 's' }}</span></span>
+    </h2>
+    <div class="sc-list" id="sc-list">
+      {% for l in lines %}
+      <div class="sc-line" data-pid="{{ l.product_id }}">
+        <div class="sc-info"><b>{{ l.name }}</b><small>{{ l.sku }}</small></div>
+        <div class="sc-qty">
+          <button type="button" data-act="dec" aria-label="One less">−</button>
+          <input class="sc-set" type="number" inputmode="numeric" min="0" max="100000" value="{{ l.counted }}" data-was="{{ l.counted }}" aria-label="Counted quantity for {{ l.name }}">
+          <button type="button" data-act="inc" aria-label="One more">+</button>
+        </div>
+        <button type="button" class="sc-rm" data-act="rm">Remove</button>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sc-empty" id="sc-empty"{% if lines %} hidden{% endif %}>Nothing counted yet.</div>
+  </div>
+
+  <div class="sc-foot">
+    <span class="text-muted" style="font-size:13px">Partial counts are fine. Products you don't scan are left alone.</span>
+    <a href="/stock-count/{{ count.id }}/review" class="btn-primary" style="min-height:44px">Review &amp; finish</a>
+  </div>
+</div>
+<script src="/static/scan.js?v=54" data-csrf="{{ csrf_token() }}" data-can-link="{{ '1' if can_manage else '0' }}" defer></script>
+<script src="/static/stockcount.js?v=50" defer></script>
+
+{% else %}
+{# finished count: read-only #}
+<div class="sc-tiles">
+  <div class="sc-tile"><b>{{ summary.lines if summary else 0 }}</b><span>products counted</span></div>
+  <div class="sc-tile"><b>{{ summary.units_counted if summary else 0 }}</b><span>units counted</span></div>
+  {% if count.status == 'applied' %}
+  <div class="sc-tile"><b>{{ count.items_changed }}</b><span>products changed</span></div>
+  <div class="sc-tile"><b class="{{ 'sc-var-up' if count.units_net > 0 else 'sc-var-down' if count.units_net < 0 else '' }}">{{ '%+d'|format(count.units_net) }}</b><span>net units</span></div>
+  {% if can_manage %}<div class="sc-tile"><b class="{{ 'sc-var-up' if count.value_net > 0 else 'sc-var-down' if count.value_net < 0 else '' }}">{{ '%+.2f'|format(count.value_net) }}</b><span>net value at cost</span></div>{% endif %}
+  {% endif %}
+</div>
+<div class="card">
+  <p class="text-muted" style="margin:0;font-size:13px">
+    Started {{ L(count.created_at).strftime('%b %d, %Y %H:%M') }} by {{ count.created_by }}.
+    {% if count.status == 'applied' %}Applied {{ L(count.closed_at).strftime('%b %d, %Y %H:%M') }} by {{ count.closed_by }}{% if count.zero_filled %}, with uncounted products set to zero{% endif %}.
+    {% else %}Cancelled {{ L(count.closed_at).strftime('%b %d, %Y %H:%M') if count.closed_at else '' }} by {{ count.closed_by }}. The stock was not changed.{% endif %}
+  </p>
+</div>
+<div class="card">
+  <h2>Counted products</h2>
+  {% if rows %}
+  <div class="sc-scroll"><table>
+    <thead><tr><th>Product</th><th>Counted</th><th class="hide-sm">System said</th><th>{{ 'Stock moved' if count.status == 'applied' else 'Off by' }}</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      {% set shown = r.will_change if count.status == 'applied' else r.change %}
+      <tr>
+        <td>{{ r.name }}<br><small class="text-muted">{{ r.sku }}{% if r.deleted %} · product deleted since{% endif %}</small>
+          {% if count.status == 'applied' and r.change %}<br><small class="sc-why-text">Why: {{ r.reason_label or 'not given' }}</small>{% endif %}</td>
+        <td>{{ r.counted }}</td>
+        <td class="hide-sm">{{ r.at_count }}</td>
+        <td>{% if shown is none %}—{% else %}<span class="{{ 'sc-var-up' if shown > 0 else 'sc-var-down' if shown < 0 else '' }}">{{ '%+d'|format(shown) }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="text-muted" style="margin:0;font-size:13px">No products were counted.</p>
+  {% endif %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    <a href="/stock-count" class="btn-secondary btn-sm">&larr; All counts</a>
+    {% if can_manage and rows %}<a href="/stock-count/{{ count.id }}/export.csv" class="btn-secondary btn-sm">Download CSV</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">Shop health</div><h1>About this system</h1></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    {% if can_backup %}<a href="/export/backup" class="btn-primary btn-sm">{{ icon('save') }} Back up now</a>{% endif %}
+    <button type="button" class="btn-secondary btn-sm" id="copy-support" data-copy-from="support-text">{{ icon('copy') }} Copy support info</button>
+  </div>
+</div>
+
+<div class="card ab-top ab-{{ report.overall }}" role="status">
+  <div class="ab-top-icon">{% if report.overall == 'ok' %}{{ icon('circle-check') }}{% elif report.overall == 'warn' %}{{ icon('triangle-alert') }}{% else %}{{ icon('shield') }}{% endif %}</div>
+  <div>
+    <div class="ab-top-title">{{ V.LABEL }} · version {{ V.VERSION }}</div>
+    <div class="text-muted" style="font-size:13px">
+      {% if report.problems %}{{ report.problems }} thing{{ '' if report.problems == 1 else 's' }} to fix{% if report.warnings %} and {{ report.warnings }} to look at{% endif %}.
+      {% elif report.warnings %}Everything works. {{ report.warnings }} thing{{ '' if report.warnings == 1 else 's' }} worth a look.
+      {% else %}Everything looks healthy.{% endif %}
+      {{ V.NAME }}.
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Checks</h2>
+  <ul class="ab-list">
+    {% for c in report.checks %}
+    <li class="ab-item ab-{{ c.state }}" data-check="{{ c.key }}">
+      <span class="ab-dot" aria-hidden="true"></span>
+      <div class="ab-main">
+        <div class="ab-label">{{ c.label }} <span class="ab-state">{{ {'ok':'OK','warn':'Look at this','bad':'Fix this','info':''}[c.state] }}</span></div>
+        <div class="ab-value">{{ c.value }}</div>
+        {% if c.help %}<div class="ab-help">{{ c.help }}</div>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h2>Support info</h2>
+  <p class="text-muted" style="font-size:12.5px;margin-top:0">Paste this when you ask for help. It holds counts and yes/no answers only: no customer names, no phone numbers, no passwords or keys.</p>
+  <textarea id="support-text" class="ab-support" readonly rows="{{ report.checks|length + 4 }}" aria-label="Support information">{{ support_text }}</textarea>
+  <div class="hint" id="copy-status" role="status" aria-live="polite" style="text-align:left;margin-top:6px"></div>
+</div>
+<script src="/static/about.js?v=54" defer></script>
+{% endblock %}

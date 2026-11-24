@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Return items <span class="text-muted" style="font-size:16px;font-weight:500">· {{ invoice.number }}</span></h1>
+<p class="text-muted" style="max-width:640px">Take back just some of this sale. The customer gets back what they paid for those items — their share of any discount and of each tax — and
+  you choose whether they go back on the shelf. To refund the <b>whole</b> invoice, tick every item (or use <a href="/invoices/{{ invoice.id }}">Process Refund</a> on the invoice if nothing has been returned yet).</p>
+
+{% if error %}<div class="card" style="border-color:var(--red)" role="alert">{{ error }}</div>{% endif %}
+
+<form method="post" action="/invoices/{{ invoice.id }}/return/preview" id="return-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card">
+    <h2>Which items are coming back?</h2>
+    {% for r in rows %}
+    {% set l = r.line %}
+    <div class="ret-row{{ ' ret-done' if r.left == 0 }}">
+      <div class="ret-what">
+        <b>{{ l.name }}</b>
+        <div class="text-muted" style="font-size:12px">
+          ${{ "%.2f"|format(l.price) }} each{% if l.sku %} · {{ l.sku }}{% endif %}{% if l.imei %} · IMEI {{ l.imei }}{% endif %}<br>
+          Sold {{ r.sold }}{% if r.returned %} · already returned {{ r.returned }}{% endif %}
+        </div>
+      </div>
+      {% if r.left > 0 %}
+      <div class="ret-qty">
+        <label for="qty-{{ l.id }}">Return</label>
+        <input type="number" inputmode="numeric" min="0" max="{{ r.left }}" step="1" id="qty-{{ l.id }}" name="qty_{{ l.id }}"
+               value="{{ picks.get(l.id, 0) }}" data-left="{{ r.left }}" aria-label="How many {{ l.name }} to return (up to {{ r.left }})">
+        <span class="text-muted" style="font-size:12px">of {{ r.left }}</span>
+      </div>
+      <label class="ret-shelf" title="Tick if the item is fine to sell again. Leave it unticked if it is damaged or defective.">
+        <input type="checkbox" name="shelf_{{ l.id }}" {{ 'checked' if (not shelf) or shelf.get(l.id) }} {{ 'disabled' if not l.product_id }}>
+        {% if l.product_id %}Back on the shelf{% else %}<span class="text-muted">Not a stocked item</span>{% endif %}
+      </label>
+      {% else %}
+      <div class="text-muted ret-allback">All returned</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div style="margin-top:8px"><button type="button" class="btn-secondary btn-sm" id="ret-all">Return everything that's left</button></div>
+  </div>
+
+  <div class="card">
+    <h2>How does the money go back?</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="ret-method">Paid back via</label>
+        <select name="method" id="ret-method" required>
+          <option value="">Choose…</option>
+          {% for m in methods %}
+          <option value="{{ m }}" {{ 'selected' if method == m }} {{ 'disabled' if m == 'Store Credit' and not has_customer }}>{{ {'Cash': 'Cash (from the drawer)', 'Card': 'Card (back to the card, on the terminal)', 'Store Credit': 'Store credit' ~ ('' if has_customer else ' (needs a customer)'), 'E-Transfer': 'E-Transfer'}[m] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="ret-reason">Reason <span class="text-muted" style="font-weight:400">(optional)</span></label>
+        <input name="reason" id="ret-reason" maxlength="200" value="{{ reason }}" placeholder="e.g. wrong size, defective, changed mind">
+      </div>
+    </div>
+    <p class="text-muted" style="font-size:12px;margin:0">Cash Up and the card check use this to keep the drawer and the terminal right. Nothing is saved until you confirm on the next screen.</p>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn-primary">{{ icon('check') }} Review the refund</button>
+    <a class="btn-secondary" href="/invoices/{{ invoice.id }}">Cancel</a>
+  </div>
+</form>
+<script src="/static/returns.js?v=52"></script>
+{% endblock %}

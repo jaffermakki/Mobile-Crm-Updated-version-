@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Record cash taken out / an expense</h1>
+<p class="text-muted" style="max-width:640px">Took money out of the till for supplies, a lunch run or a supplier paid in cash? Write it down here so Cash Up expects that much less
+  and doesn't come up short with no explanation. Use “Paid another way” for something paid by card or bank, so it's still on the books.</p>
+
+{% if error %}<div class="card" style="border-color:var(--red)" role="alert">{{ error }}</div>{% endif %}
+
+<form method="post" action="/expenses" id="expense-form" style="max-width:560px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="ex-amount">Total paid ($, tax included)</label>
+        <input id="ex-amount" name="amount" type="number" inputmode="decimal" step="0.01" min="0.01" max="100000" required value="{{ v.get('amount','') }}" placeholder="0.00">
+      </div>
+      <div class="form-group" id="ex-tax-group">
+        <label for="ex-tax">Of which tax ($) <span class="text-muted" style="font-weight:400">(optional)</span></label>
+        <input id="ex-tax" name="tax_paid" type="number" inputmode="decimal" step="0.01" min="0" value="{{ v.get('tax_paid','') }}" placeholder="0.00">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="ex-cat">Category</label>
+        <select id="ex-cat" name="category" required>
+          <option value="">Choose…</option>
+          {% for c in categories %}<option value="{{ c }}" {{ 'selected' if v.get('category') == c }} data-moves="{{ '1' if c in not_expense else '' }}">{{ c }}{{ ' (not a business cost)' if c in not_expense }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="ex-from">Where did the money come from?</label>
+        <select id="ex-from" name="paid_from">
+          {% for k, label in paid_from.items() %}<option value="{{ k }}" {{ 'selected' if v.get('paid_from', 'drawer') == k }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="ex-desc">What was it for?</label>
+      <input id="ex-desc" name="description" maxlength="200" required value="{{ v.get('description','') }}" placeholder="e.g. printer paper, lunch for the shop, courier">
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label for="ex-payee">Paid to <span class="text-muted" style="font-weight:400">(optional)</span></label>
+        <input id="ex-payee" name="payee" maxlength="80" value="{{ v.get('payee','') }}" placeholder="Shop or person"></div>
+      <div class="form-group"><label for="ex-ref">Receipt # <span class="text-muted" style="font-weight:400">(optional)</span></label>
+        <input id="ex-ref" name="receipt_ref" maxlength="60" value="{{ v.get('receipt_ref','') }}"></div>
+    </div>
+    {% if can_backdate %}
+    <div class="form-group">
+      <label for="ex-date">Date <span class="text-muted" style="font-weight:400">(leave blank for today)</span></label>
+      <input id="ex-date" name="spent_on" type="date" max="{{ today }}" value="{{ v.get('spent_on','') }}">
+    </div>
+    {% endif %}
+    <p class="text-muted" style="font-size:12px;margin:0" id="ex-hint">Bank deposits and owner draws take cash out of the till but aren't counted as business costs.</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn-primary">{{ icon('check') }} Save</button>
+    <a class="btn-secondary" href="/expenses">Cancel</a>
+  </div>
+</form>
+<script src="/static/expenses.js?v=52"></script>
+{% endblock %}

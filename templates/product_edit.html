@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Edit Product</h1>
+{% if flash %}
+<div data-flash class="card" style="max-width:480px;border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--warn)' if flash[0]=='amber' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+<div class="card" style="max-width:480px">
+  <form method="post" action="/products/{{ product.id }}/edit"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row">
+      <div class="form-group"><label>SKU</label><input name="sku" value="{{ product.sku }}" required></div>
+      <div class="form-group"><label>Name</label><input name="name" value="{{ product.name }}" required></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Barcode <span class="text-muted" style="font-weight:400">(the number printed under the manufacturer's bars)</span></label>
+        <div class="input-scan"><input type="hidden" name="has_barcode" value="1"><input name="barcode" id="ep-barcode" value="{{ product.barcode or '' }}" inputmode="numeric" autocomplete="off" maxlength="32" placeholder="Scan or type the UPC / EAN">
+          <button type="button" class="scan-btn" data-scan-fill="ep-barcode" data-scan-title="Scan the product's barcode" aria-label="Scan the barcode with the camera">{{ icon('scan-barcode') }}</button></div>
+        <div class="hint" style="text-align:left;margin-top:4px">Your own shelf labels keep using the SKU. This is only so the register and stock counts recognise the maker's barcode on the box.</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Category</label>
+        <select name="category" id="ep-category" onchange="updateBrandOptions('ep-category','ep-brand')">
+          {% for key, label in category_labels.items() %}<option value="{{ key }}" {% if product.category==key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Brand</label>
+        <select name="subcategory" id="ep-brand"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Variant Group <span class="text-muted" style="font-weight:400">(optional)</span></label>
+        <input name="variant_group" value="{{ product.variant_group or '' }}" placeholder="e.g. Clear Silicone Case">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cost</label><input name="cost" type="number" step="0.01" value="{{ product.cost }}"></div>
+      <div class="form-group"><label>Price</label><input name="price" type="number" step="0.01" value="{{ product.price }}"></div>
+      <div class="form-group"><label>Stock</label><input name="stock" type="number" value="{{ product.stock }}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Reorder At</label><input name="reorder_threshold" type="number" value="{{ product.reorder_threshold }}"></div>
+      <div class="form-group"><label>Reorder Qty</label><input name="reorder_qty" type="number" value="{{ product.reorder_qty }}"></div>
+    </div>
+    <button class="btn-primary">Save Changes</button>
+  </form>
+</div>
+<a href="/products">&larr; Back to products</a>
+
+<script>
+const CAT_SUBCATEGORIES = {{ cat_subcategories|tojson }};
+function updateBrandOptions(catSelectId, brandSelectId, selected){
+  const cat = document.getElementById(catSelectId).value;
+  const brandSelect = document.getElementById(brandSelectId);
+  const opts = CAT_SUBCATEGORIES[cat] || ['Generic'];
+  brandSelect.innerHTML = opts.map(b => `<option value="${b}" ${b===selected?'selected':''}>${b}</option>`).join('');
+}
+updateBrandOptions('ep-category','ep-brand','{{ product.subcategory }}');
+</script>
+<script src="/static/scan.js?v=54" data-csrf="{{ csrf_token() }}" data-can-link="1" defer></script>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* Check-in sheet — plain black on white so it prints well on any printer, A4 or Letter. */
+#sheet { font-family: 'Inter', Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 28px 32px; background: #fff; color: #111; border: 1px solid #d9d9d9; box-sizing: border-box; line-height: 1.45 }
+#sheet * { box-sizing: border-box }
+#sheet h2 { font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; color: #444; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #bbb }
+#sheet .head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 12px }
+#sheet .shop { font-size: 12px; color: #333 }
+#sheet .shop strong { font-size: 18px; color: #111; display: block; margin-bottom: 2px }
+#sheet .ticket { text-align: right }
+#sheet .ticket .lbl { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #555 }
+#sheet .ticket .no { font-size: 28px; font-weight: 800; letter-spacing: -0.5px }
+#sheet .ticket .when { font-size: 11px; color: #555 }
+#sheet .two { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px }
+#sheet .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px dotted #ccc }
+#sheet .kv > span:first-child { color: #555 }
+#sheet .kv > span:last-child { font-weight: 600; text-align: right }
+#sheet .tick { display: inline-block; min-width: 62px; text-align: center; font-size: 11px; font-weight: 700; padding: 1px 6px; border: 1px solid #888; border-radius: 4px }
+#sheet .tick.issue { background: #111; color: #fff; border-color: #111 }
+#sheet .tick.na { color: #777; border-style: dashed; font-weight: 500 }
+#sheet .alert { border: 2px solid #111; padding: 6px 10px; font-weight: 700; font-size: 12.5px; margin-top: 10px }
+#sheet .shots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px }
+#sheet .shots img { width: 88px; height: 88px; object-fit: cover; border: 1px solid #aaa }
+#sheet .terms { font-size: 10.5px; color: #333; margin-top: 8px }
+#sheet .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 34px }
+#sheet .sign div { border-top: 1px solid #111; padding-top: 4px; font-size: 11px; color: #444 }
+@media (max-width: 560px) { #sheet { padding: 16px } #sheet .two { grid-template-columns: 1fr } #sheet .head { flex-direction: column } #sheet .ticket { text-align: left } }
+@media print {
+  .no-print { display: none !important }
+  .content { padding: 0 !important }
+  html, body { background: #fff !important }
+  #sheet { border: none; max-width: none; padding: 0 }
+  #sheet .tick.issue { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+  /* tighter on paper, so even a ticket with every row ticked, long notes and six photos stays on one page */
+  #sheet { font-size: 11.5px; line-height: 1.35 }
+  #sheet h2 { margin: 11px 0 4px }
+  #sheet .head { padding-bottom: 8px }
+  #sheet .ticket .no { font-size: 24px }
+  #sheet .kv { font-size: 11.5px; padding: 2px 0 }
+  #sheet .shots img { width: 64px; height: 64px }
+  #sheet .terms { font-size: 9.5px; margin-top: 4px }
+  #sheet .sign { margin-top: 22px }
+  #sheet .sign, #sheet .terms, #sheet .shots { break-inside: avoid }
+}
+@page { margin: 11mm }
+</style>
+
+<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+  <button onclick="window.print()" class="btn-primary">{{ icon('printer') }} Print</button>
+  <a href="/repairs/{{ repair.id }}" class="btn-secondary">Back to ticket</a>
+</div>
+
+<div id="sheet">
+  <div class="head">
+    <div class="shop"><strong>{{ shop.name }}</strong>
+      {% if shop.address %}{{ shop.address }}<br>{% endif %}{% if shop.phone %}{{ shop.phone }}{% endif %}{% if shop.phone and shop.email %} · {% endif %}{% if shop.email %}{{ shop.email }}{% endif %}
+    </div>
+    <div class="ticket"><div class="lbl">Repair check-in</div><div class="no">#{{ repair.ticket_no }}</div>
+      <div class="when">Dropped off {{ L(repair.created_at).strftime('%b %d, %Y %H:%M') }}</div></div>
+  </div>
+
+  <h2>Customer and device</h2>
+  <div class="two">
+    <div class="kv"><span>Customer</span><span>{{ repair.customer.name if repair.customer else '—' }}</span></div>
+    <div class="kv"><span>Phone</span><span>{{ repair.customer.phone if repair.customer and repair.customer.phone else '—' }}</span></div>
+    <div class="kv"><span>Device</span><span>{{ repair.device }}</span></div>
+    <div class="kv"><span>IMEI / serial</span><span>{{ repair.imei or '—' }}</span></div>
+    <div class="kv"><span>Problem</span><span>{{ repair.issue }}</span></div>
+    <div class="kv"><span>Estimate</span><span>{% if repair.estimated_cost is not none %}${{ "%.2f"|format(repair.estimated_cost) }}{% else %}—{% endif %}</span></div>
+    <div class="kv"><span>Promised by</span><span>{{ repair.promised_by or '—' }}</span></div>
+    <div class="kv"><span>Warranty on repair</span><span>{{ repair.warranty_days }} days</span></div>
+  </div>
+  {% if repair.description %}<div class="kv"><span>Details</span><span style="text-align:right">{{ repair.description }}</span></div>{% endif %}
+
+  {% if intake_has %}
+  {% if intake.find_my == 'on' %}<div class="alert">Find My / Google lock was ON when the device was dropped off.</div>{% endif %}
+  <h2>Condition when it came in</h2>
+  <div class="two">
+    {% for r in intake_rows %}
+    <div class="kv"><span>{{ r.label }}</span><span><span class="tick {{ r.state }}">{{ r.words }}</span></span></div>
+    {% endfor %}
+  </div>
+  <div class="two" style="margin-top:6px">
+    <div class="kv"><span>Left with us</span><span>{{ intake_left|join(', ') if intake_left else 'Nothing' }}</span></div>
+    <div class="kv"><span>Passcode</span><span>{{ intake_passcode or '—' }}</span></div>
+    <div class="kv"><span>Find My / Google lock</span><span>{{ intake_find_my or '—' }}</span></div>
+    <div class="kv"><span>Data warning given</span><span>{{ 'Yes' if intake.data_warning else 'No' }}</span></div>
+  </div>
+  {% if intake.notes %}<div class="kv"><span>Notes</span><span style="text-align:right">{{ intake.notes }}</span></div>{% endif %}
+  {% else %}
+  <h2>Condition when it came in</h2>
+  <div style="font-size:12px;color:#555">No condition check-in was recorded. Existing scratches, cracks and marks: ______________________________________________</div>
+  {% endif %}
+
+  {% if shots %}
+  <h2>Photos taken at drop-off ({{ shots|length }})</h2>
+  <div class="shots">{% for p in shots %}<img src="/repairs/{{ repair.id }}/photos/{{ p.id }}/thumb" alt="{{ photo_label_names.get(p.label, p.label) }}">{% endfor %}</div>
+  {% endif %}
+
+  <h2>Terms</h2>
+  <div class="terms">{{ terms }}</div>
+
+  <div class="sign">
+    <div>Customer signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>
+    <div>Received by{% if intake.by %}: {{ intake.by }}{% else %}: {{ staff.name }}{% endif %}</div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+{% set exp = ('?' + qs) if qs else '' %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow"><a href="/reports/center">Report Center</a> · {{ spec.group }}</div>
+    <h1>{{ report.title }}</h1>
+    <div class="text-muted" style="font-size:12px">{{ report.subtitle }}</div>
+  </div>
+  <div class="quick-actions no-print">
+    <a href="/reports/center/{{ key }}/print{{ exp }}" target="_blank" class="btn-secondary btn-sm">{{ icon('printer') }} Print</a>
+    <a href="/reports/center/{{ key }}/export.csv{{ exp }}" class="btn-secondary btn-sm">{{ icon('file-text') }} CSV</a>
+    <a href="/reports/center/{{ key }}/export.xlsx{{ exp }}" class="btn-primary btn-sm">{{ icon('save') }} Excel</a>
+  </div>
+</div>
+
+{% if tz_warning %}
+<div class="card" style="border-color:var(--red)">{{ icon('triangle-alert') }} <strong>Check this computer's clock data.</strong> {{ tz_warning }}</div>
+{% endif %}
+<form method="get" class="card no-print" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
+  {% if 'date' in spec.params %}
+  <label style="font-size:11px">Day<br><input type="date" name="date" value="{{ p.date.isoformat() }}"></label>
+  {% endif %}
+  {% if 'month' in spec.params %}
+  <label style="font-size:11px">Month<br><input type="month" name="month" value="{{ '%04d-%02d'|format(p.year, p.month) }}"></label>
+  {% endif %}
+  {% if 'range' in spec.params %}
+  <label style="font-size:11px">Quick range<br>
+    <select name="preset" onchange="if(this.value){this.form.from.value='';this.form.to.value='';this.form.submit()}">
+      <option value="">Custom dates →</option>
+      {% for k, lbl in presets %}<option value="{{ k }}" {{ 'selected' if args.get('preset')==k and not args.get('from') }}>{{ lbl }}</option>{% endfor %}
+    </select></label>
+  <label style="font-size:11px">From<br><input type="date" name="from" value="{{ p.d1.isoformat() }}"></label>
+  <label style="font-size:11px">To<br><input type="date" name="to" value="{{ p.d2.isoformat() }}"></label>
+  {% endif %}
+  {% if 'days' in spec.params %}
+  <label style="font-size:11px">"No sales" window (days)<br><input type="number" name="days" min="7" max="365" value="{{ p.days }}" style="width:90px"></label>
+  {% endif %}
+  {% if 'threshold' in spec.params %}
+  <label style="font-size:11px">Flag discounts of (%) or more<br><input type="number" name="threshold" min="1" max="100" step="1" value="{{ '%g'|format(p.threshold) }}" style="width:90px"></label>
+  {% endif %}
+  <button type="submit" class="btn-primary btn-sm">Run report</button>
+</form>
+
+{% if report.kpis %}
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+  {% for k in report.kpis %}
+  <div class="stat-card">
+    <div class="stat-label">{{ k.label }}</div>
+    <div class="stat-value {{ 'text-green' if k.tone=='good' else ('text-red' if k.tone=='bad' else '') }}" {% if k.tone=='warn' %}style="color:var(--warn)"{% endif %}>{{ fmt_cell(k.value) }}</div>
+    {% if k.sub %}<div class="text-muted" style="font-size:11.5px">{{ k.sub }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if report.notes %}
+<div class="card" style="border-color:var(--warn)">
+  {% for n in report.notes %}<div style="font-size:12.5px;margin:3px 0">{{ icon('triangle-alert') }} {{ n }}</div>{% endfor %}
+</div>
+{% endif %}
+
+{% for s in report.sections %}
+<div class="card card-flush" style="margin-bottom:16px">
+  <div class="card-head"><h2>{{ s.title }}</h2><span class="text-dim" style="font-size:11px">{{ s.rows|length }} row{{ 's' if s.rows|length != 1 }}</span></div>
+  {% if s.note %}<div class="text-muted" style="font-size:12px;padding:10px 18px 0">{{ s.note }}</div>{% endif %}
+  {% if s.bars and s.bars|length > 1 %}
+  {% set vals = s.bars|map(attribute=1)|map('abs')|list %}
+  {% set mx = (vals|max) or 1 %}
+  <div style="display:flex;align-items:flex-end;gap:3px;height:110px;padding:12px 18px 0">
+    {% for lbl, v in s.bars %}
+    <div title="{{ lbl }}: ${{ '{:,.2f}'.format(v) }}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px;min-width:0">
+      <div style="width:100%;max-width:26px;min-height:{{ 2 if v else 0 }}px;height:{{ (v|abs / mx * 78)|round(1) }}%;border-radius:3px 3px 0 0;background:{{ 'var(--red)' if v < 0 else 'var(--accent)' }}"></div>
+      <div class="text-dim" style="font-size:9px;white-space:nowrap">{{ lbl }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if s.rows %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>{% for h in s.headers %}<th class="{{ 'text-right' if loop.index0 > 0 and s.rows[0][loop.index0] is not none and is_num(s.rows[0][loop.index0]) }}">{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in s.rows %}
+      <tr>{% for c in row %}<td class="{{ 'text-right num' if is_num(c) }}">{{ fmt_cell(c) }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+    {% if s.foot %}
+    <tfoot><tr>{% for c in s.foot %}<td class="{{ 'text-right num' if is_num(c) }}" style="font-weight:700;border-top:2px solid var(--border-strong)">{{ fmt_cell(c) }}</td>{% endfor %}</tr></tfoot>
+    {% endif %}
+  </table>
+  </div>
+  {% else %}
+  <div class="text-muted" style="padding:16px 18px;font-size:13px">{{ s.empty }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+<div class="text-dim" style="font-size:11px;margin:6px 0 20px">Generated {{ generated }} ({{ tz_label }}). Sales are counted on the day they were rung up; refunds on the day they were processed.</div>
+{% endblock %}

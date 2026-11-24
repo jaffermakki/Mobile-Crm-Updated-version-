@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">How-to</div><h1>Help</h1></div></div>
+
+{% if welcome %}
+<div class="card" style="border-color:var(--green)">{{ icon('circle-check') }} <strong>{{ shop_name }} is set up.</strong> You are signed in as the owner. Add your staff on the <a href="/staff">Staff</a> page, then read the short guide below.</div>
+{% endif %}
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else ('var(--warn)' if flash[0]=='amber' else 'var(--red)') }}">{{ flash[1] }}</div>
+{% endif %}
+
+<div class="card">
+  <h2>Quick jumps</h2>
+  <div class="help-jumps">
+    <a href="#sell">Selling</a>{% if is_manager %}<a href="#returns">Returns</a>{% endif %}<a href="#repairs">Repairs</a><a href="#quotes">Repair quotes</a><a href="#tradeins">Trade-ins</a><a href="#scan">Using the camera</a>
+    <a href="#stock">Stock count</a>{% if is_manager %}<a href="#po">Receiving an order</a>{% endif %}<a href="#close">End of day</a><a href="#safe">Staying safe</a>
+  </div>
+</div>
+
+<div class="card" id="sell">
+  <h2>{{ icon('shopping-cart') }} Selling at the counter</h2>
+  <ol class="help-steps">
+    <li>Open <a href="/pos">Point of Sale</a>. Scan a barcode with a USB scanner, or tap <strong>Camera</strong> and point the phone at the barcode. You can also type a SKU or tap a product.</li>
+    <li>Selling a phone? A box appears on the line for its IMEI. Tap the small scan button next to it and scan the barcode on the box, or type it. Dial <strong>*#06#</strong> on the phone to see its IMEI.</li>
+    <li>Pick the customer (optional), choose how they pay, and finish the sale.</li>
+  </ol>
+  <p class="text-muted help-note">If the IMEI looks wrong (the wrong length, or it fails the check-digit test) you get a yellow warning. It never stops the sale, because some phones have serial numbers instead.</p>
+</div>
+
+{% if is_manager %}
+<div class="card" id="returns">
+  <h2>{{ icon('undo-2') }} Taking back some of the items on a sale</h2>
+  <ol class="help-steps">
+    <li>Open the invoice (from <a href="/invoices">Invoices</a>) and tap <strong>Return items</strong>.</li>
+    <li>Set how many of each item the customer is bringing back. Untick <strong>Back on the shelf</strong> for anything damaged or defective, so it is not counted as stock you can sell again.</li>
+    <li>Choose how the money goes back (cash from the drawer, back to the card on the terminal, store credit, or e-transfer) and tap <strong>Review the refund</strong>.</li>
+    <li>Check the amount, then tap <strong>Confirm return &amp; refund</strong>. Nothing is saved until you do.</li>
+  </ol>
+  <p class="text-muted help-note">The customer gets back what they actually paid for those items, including their share of any discount and of each tax. You can return a sale in several pieces; together they never come to more than the sale. Cash Up and the card check count the return on the day it happens. Once part of a sale has been returned, the whole-invoice <em>Process Refund</em> and exchanges are switched off for it; use <em>Return items</em> for whatever is left.</p>
+</div>
+{% endif %}
+
+<div class="card" id="repairs">
+  <h2>{{ icon('wrench') }} Taking in a repair</h2>
+  <ol class="help-steps">
+    <li>Open <a href="/repairs">Repairs</a> and fill in the customer details.</li>
+    <li><strong>Device:</strong> pick the brand, then pick the model from the list (iPhones and iPads, Samsung phones, Galaxy M phones and Galaxy Tabs, Google Pixels including the Pixel 10 and 11 and the Pixel Tablet, and Motorola are included). If the model is not in the list, choose <em>Not in the list — type it</em>, or type straight into the box.</li>
+    <li><strong>IMEI:</strong> tap the scan button and scan the barcode on the phone's box or back, or type the number.</li>
+    <li>Save the ticket. On the ticket, take <strong>Photos</strong> of the front, the back and any damage <em>before</em> the repair starts.</li>
+    <li>Use <strong>Record check-in</strong> to note the phone's condition when it arrives (what works, what is damaged, what was left with you, the passcode, and whether Find My or a Google lock is on). Then <strong>Print check-in sheet</strong> for the customer to sign.</li>
+  </ol>
+</div>
+
+<div class="card" id="quotes">
+  <h2>{{ icon('shield-check') }} Asking the customer to approve a repair price</h2>
+  <ol class="help-steps">
+    <li>Open the repair ticket and find <strong>Quote approval</strong>. Enter the price (before tax), what the work is, an optional message, and how long the quote is good for.</li>
+    <li>Tap <strong>Text the quote to</strong> the customer's name. They get a text with a private link. If the customer has no phone number, or asked not to be texted, tap <strong>Just make the link</strong> and send it yourself with <strong>Copy</strong>.</li>
+    <li>The customer opens the link and taps <strong>Approve this quote</strong> or <strong>Decline</strong>. They see only your shop name, the ticket number, the device, the work and the price. You get a bell notification, and the ticket shows the answer.</li>
+    <li>If they tell you in person or by phone instead, tap <strong>They approved</strong> or <strong>They declined</strong> on the ticket to record it.</li>
+  </ol>
+  <p class="text-muted help-note">Approving sets the ticket's price to the quote, but it does not move the repair to the next stage; you still decide when work starts. Only the first answer counts, and a new quote replaces the old one, so the old link stops working. Use <strong>Withdraw</strong> to cancel a quote that has not been answered. Opening the link does not answer it.</p>
+</div>
+
+<div class="card" id="tradeins">
+  <h2>{{ icon('smartphone') }} Trade-ins</h2>
+  <p>Open <a href="/trade-ins">Trade-Ins</a> — the device and IMEI boxes work the same way as on a repair ticket: pick the brand and model from the list, and scan or type the IMEI.</p>
+</div>
+
+<div class="card" id="scan">
+  <h2>{{ icon('scan-barcode') }} Using the phone camera to scan</h2>
+  <ul class="help-steps">
+    <li>The first time, the browser asks to use the camera. Tap <strong>Allow</strong>. If you tapped <em>Block</em> by mistake, open the browser's site settings and allow the camera for this site.</li>
+    <li>The camera only works on a secure (https) address. The live site is secure; a plain http address on the shop network will not open the camera.</li>
+    <li>Hold the barcode flat, fill about half the frame, and keep the light off the glare. It beeps and the code is filled in.</li>
+    <li>A small IMEI label on a phone's box or back is the hardest one: hold the phone about 15 to 25 cm away (any closer and the camera cannot focus), use good light, and use <strong>Zoom</strong> or <strong>Light</strong> if they show. If it still will not read, tap <strong>Take a photo instead</strong>, take a close, sharp picture of the label with the phone's own camera, and it is read from the photo. You can always type the number.</li>
+    <li>If a barcode is new to the system, you are offered a chance to link it to a product so the next scan works by itself.</li>
+  </ul>
+  <p style="margin:10px 0 0"><a class="btn-secondary btn-sm" href="/scanner-test">{{ icon('scan-barcode') }} Test the scanner on this phone</a>
+    <span class="hint" style="text-align:left">Open Help on the phone you scan with, tap this, and follow the four steps. It shows exactly what is wrong if scanning does not work.</span></p>
+</div>
+
+<div class="card" id="stock">
+  <h2>{{ icon('scan-line') }} Counting stock</h2>
+  <ol class="help-steps">
+    <li>Open <a href="/stock-count">Stock Count</a> and tap <strong>Start counting</strong>. Choose one category, or the whole shop.</li>
+    <li>Tap <strong>Scan with camera</strong> and scan each item once per unit. The count builds itself. The screen does not show what the system expects, so the count stays honest.</li>
+    {% if is_manager %}
+    <li>When you finish, tap <strong>Review &amp; finish</strong>. You see every product that is off by some amount. For each difference, pick a reason under <strong>Why?</strong> (damaged, lost or stolen, sold but not rung in, delivery not entered, and so on). Only the reasons that make sense for that difference are offered.</li>
+    <li>Nothing changes in your stock until you apply the count. <strong>Save reasons for later</strong> keeps your choices without applying.</li>
+    <li>See the totals and the products that go missing most in <a href="/reports/center/stockloss">Stock Counts &amp; Losses</a> (Report Center → Controls).</li>
+    {% else %}
+    <li>When you finish, tap <strong>Review &amp; finish</strong> and tell the owner or a manager. They approve the count.</li>
+    {% endif %}
+  </ol>
+</div>
+
+{% if is_manager %}
+<div class="card" id="po">
+  <h2>{{ icon('truck') }} Receiving a purchase order</h2>
+  <ol class="help-steps">
+    <li>Open <a href="/purchase-orders">Purchasing</a> and open the order that was sent to the supplier.</li>
+    <li>When the delivery arrives, tap <strong>Scan items as they arrive</strong>. Every line starts at 0; each scan adds 1, up to the ordered quantity. Each line shows how many of the order have been counted.</li>
+    <li>An item that is not on this order is rejected so it cannot be received by mistake. A barcode the system does not know can be linked to a product on the spot.</li>
+    <li>Tap <strong>Confirm Receipt — Add to Stock</strong>. If any line is short, you are asked to confirm. Nothing is added to stock until you do. <strong>Back to the full order</strong> returns to the normal list.</li>
+  </ol>
+</div>
+{% endif %}
+
+<div class="card" id="close">
+  <h2>{{ icon('banknote') }} End of the day</h2>
+  <ol class="help-steps">
+    <li>Took cash out of the drawer today (supplies, a lunch run, paying a supplier in cash, a bank deposit)? Record it on <a href="/expenses">Expenses</a> with <strong>Record cash out / expense</strong>, choosing <em>Cash from the till</em> as where the money came from. Do this <em>before</em> you count the drawer, so the expected total is right.</li>
+    <li>Open <a href="/cashup">Cash Up</a>, count the drawer and enter the <strong>Actual Cash Counted</strong> and the card terminal's batch total.</li>
+    <li>Open <a href="/reconcile">Moneris Check</a>. Enter the terminal's batch total, then tick each card payment off against the terminal's list. Anything that does not match is shown under <em>Needs a look</em>.</li>
+  </ol>
+</div>
+
+<div class="card" id="safe">
+  <h2>{{ icon('shield-check') }} Staying safe</h2>
+  <ul class="help-steps">
+    <li>Use your own PIN and never share it. Change it any time under <a href="/security">Security</a>. Choose six random digits, not 1111 or 1234.</li>
+    <li>The owner should turn on <strong>2-step sign-in</strong> on the Security page.</li>
+    <li>Always <a href="/logout">Log out</a> on a shared phone or computer.</li>
+    {% if is_manager %}<li>Use <strong>Download Full Backup</strong> in <a href="/settings">Settings</a> regularly and keep a copy away from the shop, or switch on the Sunday backup email.</li>{% endif %}
+  </ul>
+</div>
+{% endblock %}

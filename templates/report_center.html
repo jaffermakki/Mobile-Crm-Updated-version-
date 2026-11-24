@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Business</div>
+    <h1>Report Center</h1>
+    <div class="text-muted" style="font-size:12px">All dates and times are in {{ tz_label }} · now {{ now_local }}</div>
+  </div>
+  <div class="quick-actions">
+    <a href="/reports" class="btn-secondary btn-sm">{{ icon('trending-up') }} Classic reports page</a>
+  </div>
+</div>
+
+{% if tz_warning %}
+<div class="card" style="border-color:var(--red)">{{ icon('triangle-alert') }} <strong>Check this computer's clock data.</strong> {{ tz_warning }}</div>
+{% endif %}
+<div class="card">
+  <h2>Quick links</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for label, href in quick %}
+    <a href="{{ href }}" class="btn-secondary btn-sm">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% for group, items in groups.items() %}
+<h2 style="margin:22px 0 10px">{{ group }}</h2>
+<div class="grid grid-2">
+  {% for r in items %}
+  <a href="/reports/center/{{ r.key }}" class="card report-tile" style="display:block;text-decoration:none;color:inherit;margin-bottom:0">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span class="text-muted">{{ icon(r.icon) }}</span>
+      <strong style="font-size:15px">{{ r.title }}</strong>
+    </div>
+    <div class="text-muted" style="font-size:12.5px;line-height:1.5">{{ r.desc }}</div>
+    <div style="margin-top:8px;font-size:11px" class="text-dim">Print · CSV · Excel</div>
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+<style>.report-tile:hover{border-color:var(--border-strong)}</style>
+{% endblock %}

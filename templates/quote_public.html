@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ shop_name }} — your quote{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, nofollow, noarchive"><meta name="referrer" content="no-referrer">{% endblock %}
+{% block bare_content %}
+<div class="cp-wrap" style="--brand:{{ brand.color }};--on-brand:{{ brand.on_color }}">
+  <div class="cp-box qp-box">
+    {% set cp_title = 'Your repair quote' %}{% include "partials/cp_head.html" %}
+
+    {% if notfound %}
+      <div class="cp-card qp-state" style="padding:16px;text-align:center">
+        {% if error %}<div class="error-text">{{ error }}</div>
+        {% else %}
+        <div style="font-weight:700;margin-bottom:6px">We couldn't find that quote</div>
+        <div style="font-size:13px;color:var(--text2)">The link may be incomplete — try opening the full link from the text message{% if shop_phone %}, or call us at {{ shop_phone }}{% else %}, or call the shop{% endif %}.</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="cp-card">
+        <div class="total-row"><span>Ticket</span><span style="font-weight:700">#{{ repair.ticket_no if repair else '' }}</span></div>
+        {% if repair and repair.device %}<div class="total-row"><span>Device</span><span>{{ repair.device }}</span></div>{% endif %}
+        <div class="total-row"><span>Work</span><span style="text-align:right;max-width:200px">{{ q.summary }}</span></div>
+        <div class="total-row" style="font-size:18px"><span>Price</span><span style="font-weight:800" class="qp-price">${{ '%.2f' % q.amount }}</span></div>
+        <div style="font-size:11px;color:var(--text2);text-align:right;margin-top:-2px">before tax</div>
+        {% if q.note %}<div class="qp-note" style="margin-top:10px;font-size:13px;color:var(--text2);white-space:pre-line">{{ q.note }}</div>{% endif %}
+      </div>
+
+      {% if error %}<div class="error-text" style="margin-bottom:10px" role="alert">{{ error }}</div>{% endif %}
+
+      {% if q.status == 'pending' %}
+        <form method="post" action="/q/{{ q.token }}" class="qp-form">
+          <div class="form-group"><label for="qp-comment">Message for the shop <span style="color:var(--text2)">(optional)</span></label>
+            <input id="qp-comment" name="comment" maxlength="300" autocomplete="off" placeholder="e.g. Please call me before you start"></div>
+          <button class="cp-primary cp-approve" name="decision" value="approve" {% if preview %}disabled{% endif %}>{{ icon('check') }} Approve this quote</button>
+          <button class="cp-secondary" name="decision" value="decline" {% if preview %}disabled{% endif %}>Decline</button>
+        </form>
+        {% if q.expires_at %}<div style="font-size:11px;color:var(--text2);text-align:center;margin-top:10px">This quote is valid until {{ q.expires_at.strftime('%b %d, %Y') }}.</div>{% endif %}
+      {% elif q.status == 'approved' %}
+        <div class="cp-card qp-state" style="border-color:var(--green);padding:12px 14px;text-align:center">
+          <div style="font-weight:700">{{ icon('circle-check') }} Approved — thank you!</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px">We'll get on with the repair. We'll text you when it's ready.</div>
+        </div>
+      {% elif q.status == 'declined' %}
+        <div class="cp-card qp-state" style="padding:12px 14px;text-align:center">
+          <div style="font-weight:700">Declined</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px">No problem — we won't do this work. {% if shop_phone %}Call us at {{ shop_phone }} if you change your mind.{% else %}Call the shop if you change your mind.{% endif %}</div>
+        </div>
+      {% elif q.status == 'expired' %}
+        <div class="cp-card qp-state" style="padding:12px 14px;text-align:center">
+          <div style="font-weight:700">This quote has expired</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px">Prices change, so please {% if shop_phone %}call us at {{ shop_phone }}{% else %}call the shop{% endif %} and we'll confirm the price.</div>
+        </div>
+      {% elif q.status == 'replaced' %}
+        <div class="cp-card qp-state" style="padding:12px 14px;text-align:center">
+          <div style="font-weight:700">The shop sent you a newer quote</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px">Please use the most recent text message from us. This older price is no longer available.</div>
+        </div>
+      {% else %}
+        <div class="cp-card qp-state" style="padding:12px 14px;text-align:center">
+          <div style="font-weight:700">This quote was withdrawn</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px">{% if shop_phone %}Call us at {{ shop_phone }}{% else %}Call the shop{% endif %} for an updated price.</div>
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {% set cp_ticket = repair.ticket_no if (repair and not notfound) else '' %}{% include "partials/cp_foot.html" %}
+  </div>
+</div>
+{% endblock %}

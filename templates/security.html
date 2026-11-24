@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Your account</div><h1>Security</h1></div></div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else ('var(--warn)' if flash[0]=='amber' else 'var(--red)') }}">{{ flash[1] }}</div>
+{% endif %}
+{% if weak_pin %}
+<div class="card" style="border-color:var(--warn)">{{ icon('triangle-alert') }} Your PIN is easy to guess (a repeat like 1111 or a run like 1234). Change it below to something random.</div>
+{% endif %}
+
+<div class="card">
+  <h2>Change my PIN</h2>
+  <p class="text-muted" style="font-size:12px">Use {{ min_pin }}{% if min_pin < 8 %} to 8{% endif %} digits — 6 is a good choice. Other devices you are signed in on will be signed out.</p>
+  <form method="post" action="/security/pin" class="form-row" style="align-items:flex-end"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Current PIN</label><input name="current_pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>
+    <div class="form-group"><label>New PIN</label><input name="new_pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>
+    <div class="form-group"><label>New PIN again</label><input name="confirm_pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>
+    <button class="btn-primary">Change PIN</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>2-step sign-in {% if staff.totp_enabled %}<span class="badge badge-green">On</span>{% else %}<span class="badge badge-gray">Off</span>{% endif %}</h2>
+  {% if staff.totp_enabled %}
+    <p class="text-muted" style="font-size:12px">After your PIN, the sign-in asks for the 6-digit code from your authenticator app. You have <strong>{{ codes_left }}</strong> unused recovery code{{ '' if codes_left == 1 else 's' }} for a lost phone.</p>
+    <form method="post" action="/security/2fa/recovery" class="form-row" style="align-items:flex-end;margin-bottom:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>PIN</label><input name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>
+      <button class="btn-secondary">Make new recovery codes</button>
+    </form>
+    <form method="post" action="/security/2fa/disable" class="form-row" style="align-items:flex-end" onsubmit="return confirm('Turn off 2-step sign-in? Your PIN alone will sign you in.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>PIN</label><input name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>
+      <div class="form-group"><label>Code from the app</label><input name="code" inputmode="numeric" autocomplete="off" maxlength="7" placeholder="123456" required></div>
+      <button class="btn-secondary">Turn off</button>
+    </form>
+  {% else %}
+    <p class="text-muted" style="font-size:12px">Adds a second lock: a 6-digit code from an app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy…). Someone who learns your PIN still cannot sign in. Recommended for the Owner account.</p>
+    <a href="/security/2fa/setup" class="btn-primary btn-sm">Set up 2-step sign-in</a>
+  {% endif %}
+</div>
+
+{% if staff.role == 'owner' %}
+<div class="card">
+  <h2>Shop rules</h2>
+  <form method="post" action="/security/settings" class="form-row" style="align-items:flex-end"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Sign out after being idle</label>
+      <select name="idle_minutes">
+        {% for m in idle_choices %}<option value="{{ m }}" {% if m == idle_minutes %}selected{% endif %}>{{ 'Never (12 hours unused, or 24 hours in total, still ends a sign-in)' if m == 0 else (m ~ ' minutes' if m < 60 else (m // 60) ~ (' hour' if m == 60 else ' hours')) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Shortest PIN allowed</label>
+      <select name="min_pin">{% for n in pin_choices %}<option value="{{ n }}" {% if n == min_pin %}selected{% endif %}>{{ n }} digits</option>{% endfor %}</select>
+    </div>
+    <button class="btn-primary">Save</button>
+  </form>
+  <hr style="margin:14px 0;border:0;border-top:1px solid var(--border)">
+  <form method="post" action="/security/sign-out-all" onsubmit="return confirm('Sign out every other device now?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p class="text-muted" style="font-size:12px">Lost a phone, or a staff member left? This signs every other device out at once. This device stays signed in.</p>
+    <button class="btn-secondary">Sign every other device out</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Sign-in history</h2>
+  {% if can_see_all %}
+  <p class="text-muted" style="font-size:12px">{{ wrong_week }} wrong attempt{{ '' if wrong_week == 1 else 's' }} in the last 7 days. This device is <code>{{ this_ip }}</code>.
+    <a href="/security{{ '' if request.query_params.get('all') == '1' else '?all=1' }}">{{ 'Hide' if request.query_params.get('all') == '1' else 'Show' }} half-finished 2-step steps</a></p>
+  {% endif %}
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>When</th><th>Who</th><th>What</th><th class="hide-sm">Device</th><th class="hide-sm">Address</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="text-muted" style="white-space:nowrap">{{ L(r.ts).strftime('%b %d, %H:%M') }}</td>
+        <td>{{ r.staff_name or '—' }}</td>
+        <td>
+          {% if r.kind == 'status' %}<span class="badge badge-gray">Status page</span>
+          {% elif r.success %}<span class="badge badge-green">OK</span>
+          {% else %}<span class="badge badge-red">Failed</span>{% endif %}
+          <span class="text-muted" style="font-size:12px">{{ r.note }}</span>
+        </td>
+        <td class="hide-sm">{{ r.device }}</td>
+        <td class="hide-sm"><code>{{ r.ip }}</code></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted">Nothing yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+{# v51: Brand -> Model picker. Include inside a form-group. Variables: dp_label (default "Device"), dp_placeholder. #}
+<div class="device-picker" data-device-picker data-catalog='{{ device_catalog|tojson }}'>
+  <div class="dp-pair">
+    <select class="dp-brand" aria-label="Phone brand"><option value="">Brand…</option></select>
+    <select class="dp-model" aria-label="Phone model" hidden></select>
+  </div>
+  <input name="device" class="dp-text" placeholder="{{ dp_placeholder or 'Pick above, or type the phone here' }}" maxlength="120" autocomplete="off" required>
+  <div class="hint" style="text-align:left;margin:0">Pick the brand and model, or just type it. You can add storage or colour after it.</div>
+</div>

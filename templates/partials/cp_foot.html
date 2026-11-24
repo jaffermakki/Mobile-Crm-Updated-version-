@@ -1,0 +1,12 @@
+{# v54: contact block at the bottom of customer pages. Needs: brand, shop_name. Optional: cp_ticket (for the text message). #}
+<footer class="cp-foot">
+  <div class="cp-foot-name">{{ shop_name }}</div>
+  {% if brand.hours_lines %}<div class="cp-hours"><span class="cp-label">Hours</span><div>{% for ln in brand.hours_lines %}{{ ln }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if brand.address %}<div class="cp-addr"><span class="cp-label">Find us</span><div>{{ brand.address }}</div></div>{% endif %}
+  {% if brand.phone_digits %}
+  <div class="cp-contact">
+    <a class="cp-btn" href="tel:{{ brand.phone_digits }}">{{ icon('phone') }} <span>Call <span class="cp-num">{{ brand.phone }}</span></span></a>
+    <a class="cp-btn" href="sms:{{ brand.phone_digits }}?&amp;body={{ ('Hi, I am asking about my repair' ~ (' ticket #' ~ cp_ticket if cp_ticket else ''))|urlencode }}">{{ icon('message-circle') }} Text the shop</a>
+  </div>
+  {% elif not brand.address and not brand.hours_lines %}<div class="cp-addr text-muted">Please call or visit the shop if you have questions.</div>{% endif %}
+</footer>

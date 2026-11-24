@@ -1,0 +1,66 @@
+{# v52: repair quote — ask the customer to approve a price by text link. Needs: repair, quote, quote_* from quote_routes.detail_context #}
+<div class="card" id="quote">
+  <h2 style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+    <span>{{ icon('shield-check') }} Quote approval</span>
+    {% if quote %}<span class="badge {{ quote_badges.get(quote.status, 'badge-gray') }}">{{ quote_labels.get(quote.status, quote.status) }}</span>{% endif %}
+  </h2>
+
+  {% if quote %}
+  <div class="total-row"><span>Quoted</span><span style="font-weight:700">${{ '%.2f' % quote.amount }} <span style="color:var(--text2);font-weight:400">+ tax</span></span></div>
+  <div class="total-row"><span>For</span><span style="text-align:right">{{ quote.summary }}</span></div>
+  {% if quote.note %}<div class="total-row"><span>Your note</span><span style="text-align:right;max-width:240px">{{ quote.note }}</span></div>{% endif %}
+  <div class="total-row"><span>Sent</span><span>{{ quote.created_at.strftime('%b %d, %H:%M') }}{% if quote.sent_via == 'sms' %} · texted to {{ quote.sent_to }}{% elif quote.sent_via == '' %} · link only{% endif %}</span></div>
+  {% if quote.status == 'pending' and quote.expires_at %}<div class="total-row"><span>Valid until</span><span>{{ quote.expires_at.strftime('%b %d, %Y') }}</span></div>{% endif %}
+  {% if quote.sms_note and quote.sent_via != 'sms' %}<div class="hint" style="text-align:left;color:var(--warn)">Text not sent: {{ quote.sms_note }}</div>{% endif %}
+  {% if quote.responded_at %}
+  <div class="total-row"><span>Answered</span><span>{{ quote.responded_at.strftime('%b %d, %H:%M') }}{% if quote.responded_via == 'link' %} · by the customer's link{% else %} · recorded by {{ quote.responded_by }}{% endif %}</span></div>
+  {% if quote.response_note %}<div class="total-row"><span>Customer's message</span><span style="text-align:right;max-width:240px">{{ quote.response_note }}</span></div>{% endif %}
+  {% endif %}
+
+  {% if quote_drift %}
+  <div class="hint qt-drift" style="text-align:left;color:var(--warn);margin:6px 0">{{ icon('triangle-alert') }} The ticket's estimate (${{ '%.2f' % (repair.estimated_cost or 0) }}) no longer matches the quote the customer approved (${{ '%.2f' % quote.amount }}). If the price really has changed, send a new quote and get it approved.</div>
+  {% endif %}
+
+  {% if quote.status == 'pending' %}
+  <div class="total-row" style="align-items:center;gap:8px;margin-top:8px"><span>Link</span>
+    <span style="display:flex;gap:6px;align-items:center;min-width:0">
+      <input id="quote-link" value="{{ quote_link }}" readonly style="min-width:0;width:170px;font-size:12px" onclick="this.select()">
+      <button type="button" class="btn-secondary btn-sm" onclick="(function(b){var i=document.getElementById('quote-link');i.select();try{navigator.clipboard.writeText(i.value)}catch(e){document.execCommand('copy')};b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)})(this)">Copy</button>
+    </span>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    {% if quote_can_text %}
+    <form method="post" action="/repairs/{{ repair.id }}/quote/{{ quote.id }}/resend"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-secondary btn-sm">Text it again</button></form>
+    {% endif %}
+    <form method="post" action="/repairs/{{ repair.id }}/quote/{{ quote.id }}/cancel" onsubmit="return confirm('Withdraw this quote? The customer\'s link will stop working.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-ghost btn-sm">Withdraw</button></form>
+  </div>
+  <form method="post" action="/repairs/{{ repair.id }}/quote/{{ quote.id }}/record" class="qt-record" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Customer told you in person or by phone?</div>
+    <input name="note" maxlength="300" placeholder="Optional note (e.g. said yes on the phone)" style="width:100%;margin-bottom:6px">
+    <div style="display:flex;gap:8px">
+      <button class="btn-green btn-sm" name="decision" value="approve" style="flex:1">They approved</button>
+      <button class="btn-secondary btn-sm" name="decision" value="decline" style="flex:1">They declined</button>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if quote_history %}
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--text2)">Earlier quotes ({{ quote_history|length }})</summary>
+    {% for h in quote_history %}
+    <div class="total-row" style="font-size:12px"><span>{{ h.created_at.strftime('%b %d') }} · ${{ '%.2f' % h.amount }} · {{ h.summary }}</span><span><span class="badge {{ quote_badges.get(h.status, 'badge-gray') }}">{{ quote_labels.get(h.status, h.status) }}</span></span></div>
+    {% endfor %}
+  </details>
+  {% endif %}
+  {% endif %}
+
+  {% if not quote or quote.status != 'pending' %}
+  <details {% if not quote %}open{% endif %} style="margin-top:{{ '0' if not quote else '12px' }}">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600">{{ 'Send a new quote' if quote else 'Ask the customer to approve a price' }}</summary>
+    {% include "_quote_form.html" %}
+  </details>
+  {% else %}
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--text2)">Send a different quote (replaces this one)</summary>
+    {% include "_quote_form.html" %}
+  </details>
+  {% endif %}
+</div>

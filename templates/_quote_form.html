@@ -1,0 +1,17 @@
+<form method="post" action="/repairs/{{ repair.id }}/quote" class="qt-form" style="margin-top:8px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-group"><label>Price before tax ($)</label>
+    <input name="amount" inputmode="decimal" required placeholder="0.00" value="{{ quote_default_amount }}" autocomplete="off"></div>
+  <div class="form-group"><label>What the work is</label>
+    <input name="summary" required maxlength="120" value="{{ quote_default_summary }}" placeholder="e.g. Screen replacement" autocomplete="off"></div>
+  <div class="form-group"><label>Message to the customer <span style="color:var(--text2)">(optional)</span></label>
+    <input name="note" maxlength="300" placeholder="e.g. Includes a 90-day warranty" autocomplete="off"></div>
+  <div class="form-group"><label>Quote is valid for</label>
+    <select name="days">{% for d in quote_days %}<option value="{{ d }}" {{ 'selected' if d == 7 }}>{{ d }} days</option>{% endfor %}</select></div>
+  {% if quote_can_text %}
+  <button class="btn-primary" name="send" value="sms" style="width:100%;margin-bottom:6px">Text the quote to {{ repair.customer.name.split(' ')[0] if repair.customer and repair.customer.name else 'the customer' }}</button>
+  <button class="btn-secondary" name="send" value="link" style="width:100%">Just make the link</button>
+  {% else %}
+  <div class="hint" style="text-align:left;color:var(--warn);margin-bottom:6px">{{ quote_blocked_text }} You can still make the link and share it another way.</div>
+  <button class="btn-primary" name="send" value="link" style="width:100%">Make the link</button>
+  {% endif %}
+</form>

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block content %}
+{% set diffs = rows|selectattr('change', 'ne', 0)|list %}
+{% set matched = rows|selectattr('change', 'equalto', 0)|list %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Stock Count · Review{% if count.scope_category %} · {{ category_labels.get(count.scope_category, count.scope_category) }}{% endif %}</div>
+    <h1>{{ count.name }}</h1>
+  </div>
+  <div class="quick-actions">
+    <a href="/stock-count/{{ count.id }}" class="btn-secondary" style="padding:9px 16px;border-radius:8px;font-weight:700">&larr; Back to counting</a>
+  </div>
+</div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--warn)' if flash[0]=='amber' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+
+<div class="sc-tiles">
+  <div class="sc-tile"><b>{{ summary.lines }}</b><span>products counted</span></div>
+  <div class="sc-tile"><b>{{ summary.units_counted }}</b><span>units counted</span></div>
+  <div class="sc-tile"><b>{{ summary.changed }}</b><span>products that would change</span></div>
+  <div class="sc-tile"><b class="{{ 'sc-var-up' if summary.units_net > 0 else 'sc-var-down' if summary.units_net < 0 else '' }}">{{ '%+d'|format(summary.units_net) }}</b><span>net units</span></div>
+  {% if can_manage %}<div class="sc-tile"><b class="{{ 'sc-var-up' if summary.value_net > 0 else 'sc-var-down' if summary.value_net < 0 else '' }}">{{ '%+.2f'|format(summary.value_net) }}</b><span>net value at cost</span></div>{% endif %}
+</div>
+
+<div class="card">
+  <h2>What would change</h2>
+  {% if diffs %}
+  <div class="sc-scroll"><table class="sc-review">
+    <thead><tr><th>Product</th><th>Counted</th><th class="hide-sm">System said</th><th>Off by</th><th>Stock moves</th></tr></thead>
+    <tbody>
+    {% for r in diffs %}
+      <tr>
+        <td>{{ r.name }}<br><small class="text-muted">{{ r.sku }}{% if r.deleted %} · product deleted, will be skipped{% endif %}{% if r.now is not none and r.now != r.at_count %} · sales or deliveries since counted (now {{ r.now }}){% endif %}</small>
+          {% if can_manage %}<div class="sc-why-pick"><label>Why?</label><select class="sc-why" name="reason_{{ r.product_id }}" form="apply-form" aria-label="Why {{ r.name }} is off">
+            <option value="">Not sure / skip</option>
+            {% for key, label in reason_choices.get(r.product_id, []) %}<option value="{{ key }}"{% if r.reason == key %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select></div>{% endif %}</td>
+        <td>{{ r.counted }}</td>
+        <td class="hide-sm">{{ r.at_count }}</td>
+        <td><span class="{{ 'sc-var-up' if r.change > 0 else 'sc-var-down' }}">{{ '%+d'|format(r.change) }}</span></td>
+        <td>{% if r.will_change is none %}—{% else %}<span class="{{ 'sc-var-up' if r.will_change > 0 else 'sc-var-down' if r.will_change < 0 else '' }}">{{ '%+d'|format(r.will_change) }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if can_manage %}
+  <div style="margin-top:10px"><button type="submit" form="apply-form" formaction="/stock-count/{{ count.id }}/reasons" data-no-confirm="1" class="btn-secondary btn-sm">Save reasons for later</button>
+    <span class="text-muted" style="font-size:12px;margin-left:6px">Reasons are saved when you update the stock, and feed the “Stock Counts &amp; Losses” report.</span></div>
+  {% endif %}
+  <p class="text-muted" style="font-size:12.5px;margin-bottom:0">
+    “Off by” is your count minus what the system expected at the moment you counted it. Anything sold or delivered since then is kept, so a sale rung up while you were counting is not undone.
+  </p>
+  {% else %}
+  <p style="margin:0">Every counted product matches the system. Nothing would change.</p>
+  {% endif %}
+
+  {% if matched %}
+  <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">{{ matched|length }} product{{ '' if matched|length == 1 else 's' }} matched exactly</summary>
+    <div class="sc-scroll"><table>
+      <thead><tr><th>Product</th><th>Counted</th></tr></thead>
+      <tbody>{% for r in matched %}<tr><td>{{ r.name }}<br><small class="text-muted">{{ r.sku }}</small></td><td>{{ r.counted }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+</div>
+
+{% if uncounted_total %}
+<div class="card">
+  <h2>Not counted</h2>
+  <p style="margin-top:0">{{ uncounted_total }} product{{ '' if uncounted_total == 1 else 's' }}{% if count.scope_category %} in {{ category_labels.get(count.scope_category, count.scope_category) }}{% endif %} {{ 'was' if uncounted_total == 1 else 'were' }} not scanned.
+    They are left exactly as they are{% if can_manage %} unless you choose to set them to zero below{% endif %}.</p>
+  <details><summary style="cursor:pointer;font-weight:600">Show the list{% if uncounted_total > uncounted|length %} (first {{ uncounted|length }}){% endif %}</summary>
+    <div class="sc-scroll"><table>
+      <thead><tr><th>Product</th><th>System stock</th></tr></thead>
+      <tbody>{% for p in uncounted %}<tr><td>{{ p.name }}<br><small class="text-muted">{{ p.sku }}</small></td><td>{{ p.stock }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+</div>
+{% endif %}
+
+<div class="card" style="border-color:var(--accent)">
+  {% if can_manage %}
+  <h2>Finish</h2>
+  <form method="post" action="/stock-count/{{ count.id }}/apply" data-confirm="Update the stock for {{ summary.changed }} product{{ '' if summary.changed == 1 else 's' }} now? This changes your inventory." id="apply-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if uncounted_total %}
+    <label style="display:flex;gap:10px;align-items:flex-start;margin:0 0 12px;font-weight:500;cursor:pointer">
+      <input type="checkbox" name="zero_uncounted" value="1" id="zero-box" style="width:20px;height:20px;margin:2px 0 0;flex:none">
+      <span>Also set the {{ uncounted_total }} uncounted product{{ '' if uncounted_total == 1 else 's' }} to <b>0</b>{% if zero_units %} ({{ zero_units }} unit{{ '' if zero_units == 1 else 's' }} removed){% endif %}.
+        <small class="text-muted" style="display:block">Only tick this if you counted every item{% if count.scope_category %} in this category{% endif %} and anything you didn't scan is really gone.</small></span>
+    </label>
+    {% endif %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-primary" style="min-height:46px">{{ 'Update the stock' if summary.changed or uncounted_total else 'Finish (nothing to change)' }}</button>
+      {% if rows %}<a href="/stock-count/{{ count.id }}/export.csv" class="btn-secondary" style="min-height:46px">Download CSV</a>{% endif %}
+    </div>
+  </form>
+  <form method="post" action="/stock-count/{{ count.id }}/cancel" data-confirm="Throw this count away? Your stock stays as it is." style="margin-top:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn-ghost btn-sm" style="color:var(--red)">Cancel this count</button>
+  </form>
+  {% else %}
+  <h2>Waiting for approval</h2>
+  <p style="margin:0">Your count is saved. The owner or a manager can review it here and update the stock. You can keep counting any time before then.</p>
+  {% endif %}
+</div>
+<script>
+document.querySelectorAll('form[data-confirm]').forEach(function (f) {
+  f.addEventListener('submit', function (e) {
+    if (e.submitter && e.submitter.hasAttribute('data-no-confirm')) return;
+    if (!window.confirm(f.getAttribute('data-confirm'))) e.preventDefault();
+  });
+});
+</script>
+{% endblock %}

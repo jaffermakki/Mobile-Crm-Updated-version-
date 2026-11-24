@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <h1 style="margin:0">Expenses &amp; till paid-outs</h1>
+  <a href="/expenses/new" class="btn-primary">{{ icon('plus') }} Record cash out / expense</a>
+</div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else ('var(--warn)' if flash[0]=='amber' else 'var(--red)') }}">{{ flash[1] }}</div>
+{% endif %}
+
+{% if manager %}
+<form method="get" action="/expenses" class="card no-print" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+  <div class="form-group" style="margin:0"><label for="ex-from">From</label><input id="ex-from" type="date" name="date_from" value="{{ d1 }}"></div>
+  <div class="form-group" style="margin:0"><label for="ex-to">To</label><input id="ex-to" type="date" name="date_to" value="{{ d2 }}"></div>
+  <button class="btn-secondary">Show</button>
+  <span class="text-muted" style="font-size:12px">Quick:
+    {% for k, label in presets if k in ['today','this_week','this_month','last_month','this_quarter','ytd'] %}<a href="/expenses?preset={{ k }}">{{ label }}</a>{{ ' · ' if not loop.last }}{% endfor %}
+  </span>
+</form>
+{% else %}
+<p class="text-muted">Showing what you recorded today. A manager can see and correct every entry.</p>
+{% endif %}
+
+<div class="grid grid-4">
+  <div class="card"><div class="stat-label">Business expenses</div><div class="stat-value">${{ "%.2f"|format(totals.business) }}</div><div class="text-muted" style="font-size:12px">tax included</div></div>
+  <div class="card"><div class="stat-label">Tax in them</div><div class="stat-value">${{ "%.2f"|format(totals.tax) }}</div></div>
+  <div class="card"><div class="stat-label">Taken from the till</div><div class="stat-value">${{ "%.2f"|format(totals.till) }}</div></div>
+  <div class="card"><div class="stat-label">Paid another way</div><div class="stat-value">${{ "%.2f"|format(totals.other) }}</div></div>
+</div>
+
+<div class="card">
+  <h2>Entries</h2>
+  <div style="overflow-x:auto">
+  <table class="ex-table">
+    <thead><tr><th>When</th><th>What</th><th>Category</th><th>From</th><th style="text-align:right">Amount</th><th>By</th>{% if manager %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr{% if r.voided %} class="ex-voided"{% endif %}>
+        <td class="ex-when">{{ L(r.spent_at).strftime('%b %d %H:%M') }}</td>
+        <td class="ex-what">{{ r.description }}{% if r.payee %} <span class="text-muted">· {{ r.payee }}</span>{% endif %}{% if r.receipt_ref %} <span class="text-muted">· #{{ r.receipt_ref }}</span>{% endif %}
+          {% if r.voided %}<div class="text-muted" style="font-size:12px">Voided by {{ r.voided_by }} — {{ r.void_reason }}</div>{% endif %}</td>
+        <td class="ex-cat">{{ r.category }}</td>
+        <td class="ex-from">{{ 'Till' if r.paid_from == 'drawer' else 'Other' }}</td>
+        <td class="ex-amt" style="text-align:right">${{ "%.2f"|format(r.amount) }}{% if r.tax_paid %}<div class="text-muted" style="font-size:11px">tax ${{ "%.2f"|format(r.tax_paid) }}</div>{% endif %}</td>
+        <td class="text-muted ex-by">{{ r.staff_name }}</td>
+        {% if manager %}<td class="ex-act">
+          {% if not r.voided %}
+          <form method="post" action="/expenses/{{ r.id }}/void" class="ex-void-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input name="reason" placeholder="Why void?" maxlength="200" required aria-label="Reason for voiding" style="width:120px">
+            <button class="btn-secondary btn-sm">Void</button>
+          </form>
+          {% endif %}
+        </td>{% endif %}
+      </tr>
+    {% else %}
+      <tr><td colspan="{{ 7 if manager else 6 }}" class="text-muted ex-empty">Nothing recorded for these dates.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% if manager and by_cat %}
+<div class="card">
+  <h2>By category</h2>
+  <table>
+    <thead><tr><th>Category</th><th>Entries</th><th style="text-align:right">Total</th><th style="text-align:right">Tax in it</th></tr></thead>
+    <tbody>{% for c, n, a, t in by_cat %}<tr><td>{{ c }}{% if c in not_expense %} <span class="text-muted">(not a business cost)</span>{% endif %}</td><td>{{ n }}</td><td style="text-align:right">${{ "%.2f"|format(a) }}</td><td style="text-align:right">${{ "%.2f"|format(t) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <p style="margin-top:8px"><a href="/reports/center/expenses?from={{ d1 }}&to={{ d2 }}">Open the full Expenses report</a> (print, CSV or Excel for your accountant).</p>
+</div>
+{% endif %}
+{% endblock %}

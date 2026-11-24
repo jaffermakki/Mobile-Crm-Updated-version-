@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ shop_name }} — repair status{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, nofollow, noarchive"><meta name="referrer" content="no-referrer">{% endblock %}
+{% block bare_content %}
+<div class="cp-wrap" style="--brand:{{ brand.color }};--on-brand:{{ brand.on_color }}">
+  <div class="cp-box">
+    {% set cp_title = 'Check Repair Status' %}{% include "partials/cp_head.html" %}
+
+    {% if result %}
+      <section class="cp-card" aria-label="Your repair">
+        <div class="cp-row"><span>Ticket</span><strong>#{{ result.ticket_no }}</strong></div>
+        <div class="cp-row"><span>Device</span><span class="cp-val">{{ result.device }}</span></div>
+        <div class="cp-row"><span>Status</span><span class="badge {{ result.status_badge }}">{{ result.status }}</span></div>
+        {% if result.promised_by %}<div class="cp-row"><span>Promised by</span><span class="cp-val">{{ result.promised_by }}</span></div>{% endif %}
+      </section>
+
+      {% set pr = result.progress %}
+      <ol class="cp-steps" aria-label="Repair progress">
+        {% for st in pr.steps %}
+        <li class="cp-step cp-{{ st.state }}"{% if st.state == 'current' %} aria-current="step"{% endif %}>
+          <span class="cp-dot" aria-hidden="true">{% if st.state == 'done' %}{{ icon('check') }}{% else %}{{ loop.index }}{% endif %}</span>
+          <span class="cp-step-name">{{ st.name }}<span class="cp-sr"> ({{ 'done' if st.state == 'done' else 'now' if st.state == 'current' else 'coming up' }})</span></span>
+        </li>
+        {% endfor %}
+      </ol>
+
+      {% if result.ready %}
+      <div class="cp-banner cp-banner-ready" role="status">{{ icon('circle-check') }} <span>Ready for pickup!</span></div>
+      {% elif result.status == 'Collected' %}
+      <div class="cp-banner" role="status"><span>{{ pr.note }}</span></div>
+      {% else %}
+      <div class="cp-banner" role="status"><span>{{ pr.note }}</span><span class="cp-sub">Still being worked on — check back later or call the shop.</span></div>
+      {% endif %}
+
+      {% if result.photos %}
+      <section class="cp-photos" aria-label="Photos taken when you dropped off your phone">
+        <h2>Photos from drop-off</h2>
+        <div class="cp-grid">
+          {% for p in result.photos %}
+          <a href="/s/{{ result.token }}/photo/{{ p.id }}" target="_blank" rel="noopener noreferrer"><img src="/s/{{ result.token }}/photo/{{ p.id }}/thumb" alt="{{ p.label }} photo of your phone" loading="lazy"><span>{{ p.label }}</span></a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      <div class="cp-again"><a href="/status">Check another ticket</a></div>
+    {% else %}
+      <form method="post" action="/status" class="cp-card cp-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group"><label for="cp-ticket">Ticket number</label><input id="cp-ticket" name="ticket_no" inputmode="numeric" placeholder="e.g. 1042" required {% if not preview %}autofocus{% else %}disabled{% endif %}></div>
+        <div class="form-group"><label for="cp-last4">Last 4 digits of your phone</label><input id="cp-last4" name="phone_last4" inputmode="numeric" placeholder="1234" maxlength="4" pattern="[0-9]{4}" required {% if preview %}disabled{% endif %}></div>
+        <button class="cp-primary" {% if preview %}disabled{% endif %}>Check status</button>
+        {% if error %}<div class="error-text" role="alert" style="margin-top:12px">{{ error }}</div>{% endif %}
+      </form>
+    {% endif %}
+
+    {% set cp_ticket = result.ticket_no if result else '' %}{% include "partials/cp_foot.html" %}
+  </div>
+</div>
+{% endblock %}

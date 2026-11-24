@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Customer messaging</div>
+    <h1>Automatic texts</h1>
+    <div class="text-muted" style="font-size:12px">Ready-for-pickup texts, reminders, review requests and win-back messages. Every text is re-checked just before it is sent.</div>
+  </div>
+  <div class="quick-actions">
+    {% if staff.role == 'owner' %}
+    <form method="post" action="/messaging/run-now" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-secondary btn-sm">{{ icon('send') }} Send what is due now</button></form>
+    <a href="/messaging/settings" class="btn-primary btn-sm">{{ icon('settings') }} Settings</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+
+{% if not s.cfg.enabled %}
+<div class="card" style="border-color:var(--warn)">
+  {{ icon('triangle-alert') }} <strong>Automatic texts are switched off.</strong> Nothing is queued or sent until the owner turns them on
+  {% if staff.role == 'owner' %}in <a href="/messaging/settings">Settings</a>{% endif %}.
+</div>
+{% else %}
+  {% if not s.configured %}
+  <div class="card" style="border-color:var(--red)">{{ icon('triangle-alert') }} <strong>Twilio is not set up.</strong> Texts wait in the queue until the Twilio details are saved in Settings → Notifications.</div>
+  {% endif %}
+  {% if not s.in_window %}
+  <div class="card" style="border-color:var(--warn)">{{ icon('moon') }} It is outside sending hours ({{ s.cfg.quiet_start }}:00–{{ s.cfg.quiet_end }}:00 shop time). Due texts will go out when the window opens.</div>
+  {% endif %}
+  {% if s.waiting_devices and staff.role == 'owner' %}
+  <div class="card" style="border-color:var(--warn);display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div style="flex:1;min-width:240px">{{ icon('smartphone') }} <strong>{{ s.waiting_devices }} finished device{{ '' if s.waiting_devices==1 else 's' }}</strong> {{ 'has' if s.waiting_devices==1 else 'have' }} been waiting for pickup for a day or more with no text sent recently (for example, they became Ready before texts were switched on). Automatic texts won't go out for them.</div>
+    <form method="post" action="/messaging/catchup" onsubmit="return confirm('Send one friendly reminder to each of the {{ s.waiting_devices }} waiting customers?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-secondary btn-sm">Send one reminder to each</button></form>
+  </div>
+  {% endif %}
+{% endif %}
+
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+  <div class="stat-card"><div class="stat-label">Sent today</div><div class="stat-value">{{ s.sent_today }}</div><div class="text-muted" style="font-size:11.5px">limit {{ s.cfg.daily_cap }} a day</div></div>
+  <div class="stat-card"><div class="stat-label">Waiting to send</div><div class="stat-value">{{ s.pending }}</div></div>
+  <div class="stat-card"><div class="stat-label">Failed (7 days)</div><div class="stat-value {{ 'text-red' if s.failed_7d else '' }}">{{ s.failed_7d }}</div></div>
+  <div class="stat-card"><div class="stat-label">Skipped (7 days)</div><div class="stat-value">{{ s.skipped_7d }}</div><div class="text-muted" style="font-size:11.5px">no longer needed / no consent</div></div>
+  <div class="stat-card"><div class="stat-label">Customers who said STOP</div><div class="stat-value">{{ s.opted_out }}</div></div>
+</div>
+
+<div class="tab-nav" style="margin-top:12px">
+  {% for key, (label, _st) in tabs.items() %}
+  <a class="tab-btn {{ 'active' if tab==key }}" href="/messaging?tab={{ key }}{{ '&kind=' ~ kind if kind }}" style="text-decoration:none">{{ label }} ({{ counts[key] }})</a>
+  {% endfor %}
+</div>
+
+<div class="card no-print" style="padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <span class="text-muted" style="font-size:12px">Show:</span>
+  <a href="/messaging?tab={{ tab }}" class="btn-secondary btn-sm" {% if not kind %}style="font-weight:800"{% endif %}>All</a>
+  {% for k, lbl in KIND_LABEL.items() %}<a href="/messaging?tab={{ tab }}&kind={{ k }}" class="btn-secondary btn-sm" {% if kind==k %}style="font-weight:800"{% endif %}>{{ lbl }}</a>{% endfor %}
+</div>
+
+<div class="card" style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th>{{ 'Due' if tab=='upcoming' else ('Sent' if tab=='history' else 'Queued') }}</th><th>Type</th><th>Customer</th><th>Ticket</th>
+      <th>{{ 'Message' if tab=='history' else 'Detail' }}</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for m in rows %}
+    <tr>
+      <td style="white-space:nowrap">{{ L(m.sent_at if tab=='history' else (m.due_at if tab=='upcoming' else m.created_at)).strftime('%b %d, %H:%M') }}</td>
+      <td>{{ KIND_LABEL.get(m.kind, m.kind) }}{% if m.seq %} #{{ m.seq }}{% endif %}{% if m.source=='manual' %} <span class="badge badge-gray">by hand</span>{% endif %}</td>
+      <td>{% if m.customer %}<a href="/customers/{{ m.customer.id }}">{{ m.customer.name }}</a>{% else %}—{% endif %}</td>
+      <td>{% if m.repair %}<a href="/repairs/{{ m.repair.id }}">#{{ m.repair.ticket_no }}</a>{% else %}—{% endif %}</td>
+      <td style="max-width:380px;font-size:12.5px">
+        {% if tab=='history' %}{{ m.body }}
+        {% elif m.status in ('pending','sending') %}
+          <span class="badge badge-blue">{{ 'sending…' if m.status=='sending' else 'queued' }}</span>
+          {% if m.attempts %}<span class="text-muted"> retry {{ m.attempts }} — {{ m.last_error }}</span>{% endif %}
+        {% elif m.status=='failed' %}<span class="badge badge-red">failed</span> {{ m.last_error }}
+        {% else %}<span class="badge badge-gray">{{ m.status }}</span> {{ m.skip_reason }}{% endif %}
+      </td>
+      <td style="white-space:nowrap">
+        {% if m.status=='pending' %}
+        <form method="post" action="/messaging/{{ m.id }}/cancel" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-secondary btn-sm">Cancel</button></form>
+        {% elif m.status=='failed' and m.source!='manual' %}
+        <form method="post" action="/messaging/{{ m.id }}/retry" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-secondary btn-sm">Retry</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">
+      {% if tab=='upcoming' %}Nothing is waiting. Texts appear here when a repair becomes Ready or a phone is collected.
+      {% elif tab=='history' %}No automatic texts have been sent yet.
+      {% else %}No failed or skipped texts.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="hint" style="text-align:left;margin-top:8px">Showing the latest 150. "Sent" means Twilio accepted the text for delivery; carriers do not report back to this app whether the phone received it.</div>
+</div>
+{% endblock %}

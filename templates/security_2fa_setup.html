@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">Security</div><h1>Set up 2-step sign-in</h1></div></div>
+{% if flash %}
+<div data-flash class="card" style="border-color:{{ 'var(--green)' if flash[0]=='green' else 'var(--red)' }}">{{ flash[1] }}</div>
+{% endif %}
+<div class="card" style="max-width:520px">
+  <ol style="line-height:1.7;padding-left:18px;margin:0 0 12px">
+    <li>Install an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).</li>
+    <li>{% if qr %}Scan this square with the app, or{% else %}In the app choose “enter a setup key”, and type{% endif %} this key: <code style="font-size:14px;letter-spacing:1px">{{ secret }}</code></li>
+    <li>Type the 6-digit code the app shows now.</li>
+  </ol>
+  {% if qr %}<div style="background:#fff;display:inline-block;padding:8px;border-radius:8px;margin-bottom:12px;line-height:0">{{ qr|safe }}</div>{% endif %}
+  <form method="post" action="/security/2fa/enable" class="form-row" style="align-items:flex-end"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Code from the app</label><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" required autofocus></div>
+    <button class="btn-primary">Turn on</button>
+  </form>
+  <p class="text-muted" style="font-size:12px;margin-top:10px">Next you will get 8 one-time recovery codes. They are the only way in if the phone is lost, so keep them somewhere safe and off the phone.</p>
+  <a href="/security" class="btn-secondary btn-sm">Cancel</a>
+</div>
+{% endblock %}
